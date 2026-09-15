@@ -1831,7 +1831,7 @@ const STORY = {
             : 'force_fail';
         }
       },
-      { label: 'Ne pas prendre le risque et revenir au camp', to: 'c28' }
+      { label: 'Ne pas prendre le risque et poursuivre vers les profondeurs', to: 'c37' }
     ]
   },
 
@@ -1889,7 +1889,6 @@ const STORY = {
       `;
     },
     choices: [
-      { label: 'Revenir au camp d’Anselme', to: 'c28' },
       { label: 'Poursuivre vers les profondeurs', to: 'c37' }
     ]
   },

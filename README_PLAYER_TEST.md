@@ -16,3 +16,8 @@ Cette build est dérivée de la V32 — démo joueurs jusqu’à la page 40
 - Les rencontres de village déjà visitées disparaissent ensuite des choix.
 - Élias ne peut être visité qu'une seule fois, sauf si une future scène narrative spécifique est créée.
 - Premier point de sauvegarde : entrée de la grotte (page 20).
+
+## V37
+- Page 31 : refuser de déplacer le bloc mène directement vers les profondeurs, sans retour au camp.
+- Page 32 : après le jet de Force, réussite ou échec, la seule continuation est vers les profondeurs.
+- Le camp d’Anselme ne peut donc plus être rouvert depuis cette branche après avoir tenté la galerie condamnée.
