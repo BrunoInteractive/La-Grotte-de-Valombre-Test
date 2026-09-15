@@ -185,3 +185,8 @@ La démo joueur se poursuit désormais dans les premières galeries et s’arrê
 - Marchand et forgeron ne sont proposés qu'une seule fois sur la place de Valombre.
 - L'achat des lames d'Élias se fait désormais directement sur la page 18, sans changement de page.
 - La table des pages de la démo est correctement limitée aux pages 1 à 40.
+
+
+## V33 — Visites uniques et checkpoint
+- Marchand, forgeron, personnages de rue et Élias ne sont plus revisitable après leur première scène, sauf futur embranchement narratif explicite.
+- Premier checkpoint déplacé à la page 20, à l’entrée de la grotte.

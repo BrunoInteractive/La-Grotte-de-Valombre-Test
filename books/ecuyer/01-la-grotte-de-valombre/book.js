@@ -463,7 +463,9 @@ const STORY = {
       if (!state.flags.blacksmithVisited) {
         details.push('<p>Dans la forge, une lueur rouge éclaire encore les murs.</p>');
       }
-      details.push('<p>Plus loin, dans l’ombre d’une ruelle, une étrange silhouette semble parler toute seule.</p>');
+      if (!state.flags.valombreStreetVisited) {
+        details.push('<p>Plus loin, dans l’ombre d’une ruelle, une étrange silhouette semble parler toute seule.</p>');
+      }
       return `
         <p>La place de Valombre est presque déserte. Les volets se ferment les uns après les autres.</p>
         ${details.join('')}
@@ -474,7 +476,7 @@ const STORY = {
       const list = [];
       if (!state.flags.merchantVisited) list.push({ label: 'Voir le marchand', to: 'c4' });
       if (!state.flags.blacksmithVisited) list.push({ label: 'Voir le forgeron', to: 'c5' });
-      list.push({ label: 'Approcher la personne dans la ruelle', to: 'c6' });
+      if (!state.flags.valombreStreetVisited) list.push({ label: 'Approcher la personne dans la ruelle', to: 'c6' });
       list.push({ label: 'Partir vers la grotte', to: 'c8' });
       return list;
     }
@@ -594,6 +596,7 @@ const STORY = {
     number: 'PAGE 6',
     title: 'La silhouette dans la ruelle',
     image: 'La silhouette dans la ruelle',
+    onEnter: s => { s.flags.valombreStreetVisited = true; },
     text: `
       <p>Tu t’approches de la personne étrangement accoudée contre le mur.</p>
       <p>Elle semble parler seule, marmonnant quelque chose dans sa barbe. Sa silhouette est si maigre qu’elle paraît presque déformée.</p>
@@ -998,44 +1001,58 @@ const STORY = {
     number: 'PAGE 15',
     title: 'Rochebrume',
     image: 'Rochebrume',
-    text: state => state.flags.strangerGone ? `
-      <p>La rue de Rochebrume est toujours aussi vide.</p>
+    text: state => {
+      if (state.flags.strangerGone) {
+        return `
+          <p>La rue de Rochebrume est toujours aussi vide.</p>
 
-      <p>La taverne de Gaspard Vellin reste ouverte.</p>
+          <p>Au croisement, là où se tenait l’étranger quelques instants plus tôt, il n’y a plus personne.</p>
 
-      <p>Au croisement, là où se tenait l’étranger quelques instants plus tôt, il n’y a plus personne.</p>
+          <p>Seulement la route vide.</p>
+        `;
+      }
+      if (state.flags.eliasVisited) {
+        return `
+          <p>Le village est toujours désert.</p>
 
-      <p>Seulement la route vide.</p>
-    ` : `
-      <p>Le village est désert.</p>
+          <p>Tu as déjà parlé à Élias. Plus loin, la personne aperçue dans la rue est encore là.</p>
 
-      <p>Pas silencieux.</p>
+          <p>Rien d’autre ne semble devoir te retenir ici.</p>
+        `;
+      }
+      return `
+        <p>Le village est désert.</p>
 
-      <p><strong>Désert.</strong></p>
+        <p>Pas silencieux.</p>
 
-      <p>Une porte est ouverte.</p>
+        <p><strong>Désert.</strong></p>
 
-      <p>Une brouette a été abandonnée au milieu de la rue.</p>
+        <p>Une porte est ouverte.</p>
 
-      <p>Du linge pend encore entre deux maisons.</p>
+        <p>Une brouette a été abandonnée au milieu de la rue.</p>
 
-      <p>Sur une table, devant une habitation, une miche de pain a été laissée à moitié coupée.</p>
+        <p>Du linge pend encore entre deux maisons.</p>
 
-      <p>Comme si tous les habitants avaient simplement cessé ce qu’ils faisaient.</p>
+        <p>Sur une table, devant une habitation, une miche de pain a été laissée à moitié coupée.</p>
 
-      <p>Tu aperçois cependant deux signes de vie.</p>
+        <p>Comme si tous les habitants avaient simplement cessé ce qu’ils faisaient.</p>
 
-      <p>La taverne de Gaspard Vellin est encore ouverte.</p>
+        <p>Tu aperçois cependant deux signes de vie.</p>
 
-      <p>Et plus loin, une personne se tient seule au milieu de la rue.</p>
-    `,
+        <p>La taverne de Gaspard Vellin est encore ouverte.</p>
+
+        <p>Et plus loin, une personne se tient seule au milieu de la rue.</p>
+      `;
+    },
     choices: state => {
-      const list = [
-        { label: 'Entrer dans la taverne de Gaspard', to: 'c16' }
-      ];
+      const list = [];
+      if (!state.flags.eliasVisited) {
+        list.push({ label: 'Entrer dans la taverne de Gaspard', to: 'c16' });
+      }
       if (!state.flags.strangerGone) {
         list.push({ label: 'Parler à la personne dans la rue', to: 'c19' });
-      } else {
+      }
+      if (state.flags.eliasVisited || state.flags.strangerGone) {
         list.push({ label: 'Quitter Rochebrume et repartir vers la grotte', to: 'c20' });
       }
       return list;
@@ -1047,6 +1064,7 @@ const STORY = {
     title: 'La taverne',
     noImage: true,
     image: 'La taverne de Rochebrume',
+    onEnter: s => { s.flags.eliasVisited = true; },
     text: state => state.flags.gaspardDeathAnnounced ? `
       <p>Tu pousses de nouveau la porte de la taverne.</p>
 
@@ -1154,10 +1172,14 @@ const STORY = {
 
       <p>Il refuse désormais de répondre.</p>
     `,
-    choices: [
-      { label: 'Aller parler à la personne dans la rue', to: 'c19' },
-      { label: 'Quitter Rochebrume et repartir vers la grotte', to: 'c20' }
-    ]
+    choices: state => {
+      const list = [];
+      if (!state.flags.strangerGone) {
+        list.push({ label: 'Aller parler à la personne dans la rue', to: 'c19' });
+      }
+      list.push({ label: 'Quitter Rochebrume et repartir vers la grotte', to: 'c20' });
+      return list;
+    }
   },
 
   c18: {
@@ -1328,10 +1350,14 @@ const STORY = {
 
       <p>Seulement la route vide.</p>
     `,
-    choices: [
-      { label: 'Entrer dans la taverne de Gaspard avant de repartir', to: 'c16' },
-      { label: 'Repartir vers la grotte', to: 'c20' }
-    ]
+    choices: state => {
+      const list = [];
+      if (!state.flags.eliasVisited) {
+        list.push({ label: 'Entrer dans la taverne de Gaspard avant de repartir', to: 'c16' });
+      }
+      list.push({ label: 'Repartir vers la grotte', to: 'c20' });
+      return list;
+    }
   },
 
   c20: {
@@ -1397,7 +1423,7 @@ const STORY = {
 
       <p>Personne ne viendra te chercher.</p>
     `,    choices: [
-      { label: 'Reprendre à la sortie du village', action: 'checkpoint' },
+      { label: 'Reprendre à l’entrée de la grotte', action: 'checkpoint' },
       { label: 'Recommencer depuis le début', action: 'restart' }
     ]
   },
@@ -1452,7 +1478,7 @@ const STORY = {
 
       <p>Finalement, tu redescends jusqu’au village, te caches dans l’écurie et attends que le temps passe… en espérant que la mort finira par tout faire taire.</p>
     `,    choices: [
-      { label: 'Reprendre à la sortie du village', action: 'checkpoint' },
+      { label: 'Reprendre à l’entrée de la grotte', action: 'checkpoint' },
       { label: 'Recommencer depuis le début', action: 'restart' }
     ]
   },
@@ -4806,8 +4832,8 @@ const STORY = {
     title: 'La Grotte de Valombre',
     description: 'Première aventure de la série de l’Écuyer.',
     access: 'free',
-    contentVersion: 16,
-    saveVersion: 5,
+    contentVersion: 18,
+    saveVersion: 15,
     assetBase: './books/ecuyer/01-la-grotte-de-valombre/images',
     story: STORY,
     pageOrder: PAGE_ORDER,
@@ -4820,7 +4846,7 @@ const STORY = {
     characterSheetHtml,
     inventory,
     checkpoints: [
-      { node: 'c8', label: 'Sortie de Valombre', onlyIfNone: true }
+      { node: 'c20', label: 'Entrée de la grotte', onlyIfNone: true }
     ],
     legacyStorageKeys: [],
     legacyCheckpointKeys: [],
