@@ -43,3 +43,13 @@ La fin de la Cité morte a été réécrite pour privilégier l'aventure physiqu
 ## V26 — Cité morte : compréhension scénaristique
 
 La Cité morte raconte désormais une véritable histoire en trois branches complémentaires : les appelés, les voix qui les attirent et les tentatives des Veilleurs pour les sauver. Une salle de veille commune synthétise clairement le mécanisme pour qu'une seule route suffise à comprendre l'essentiel, tandis que les trois routes donnent toute sa profondeur au mystère lors des relectures.
+
+
+## Portraits du personnage (V34)
+
+Déposer séparément dans `books/ecuyer/01-la-grotte-de-valombre/images/` :
+
+- `La-Grotte-de-Valombre-Hero-Aelis.png`
+- `La-Grotte-de-Valombre-Hero-Aubin.png`
+
+Les portraits ne sont pas inclus dans ce ZIP. La fiche perso les affiche en cadrage horizontal 16:9 avec `object-fit: cover`.

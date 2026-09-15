@@ -324,19 +324,56 @@ function combatRoundHtml(state, key, enemy) {
     </div>`;
 }
 
+function heroGender(state) {
+  return state.heroGender === 'male' ? 'male' : 'female';
+}
+
+function heroName(state) {
+  return heroGender(state) === 'male' ? 'Aubin' : 'Aélis';
+}
+
+function heroRank(state) {
+  return heroGender(state) === 'male'
+    ? 'Écuyer de Sir Aldren de Rochebrune'
+    : 'Écuyère de Sir Aldren de Rochebrune';
+}
+
+function heroPortraitFilename(state) {
+  return heroGender(state) === 'male'
+    ? 'La-Grotte-de-Valombre-Hero-Aubin.png'
+    : 'La-Grotte-de-Valombre-Hero-Aelis.png';
+}
+
+function setHeroIdentity(state, gender) {
+  state.heroGender = gender === 'male' ? 'male' : 'female';
+  state.heroName = state.heroGender === 'male' ? 'Aubin' : 'Aélis';
+}
+
 const STORY = {
   start: {
     sheet: true,
     number: 'FICHE DU HÉROS',
-    title: 'Ton personnage',
+    title: 'Choisis ton personnage',
     text: state => `
       <div class="hero-sheet">
-        <div class="hero-sheet-row">
-          <span class="hero-label">Nom</span>
-          <input id="heroNameInput" class="hero-name-input" type="text" maxlength="24"
-            placeholder="Ton nom" value="${escapeHtml(state.heroName || '')}">
+        <div class="hero-selection-title">Qui veux-tu incarner ?</div>
+        <div class="hero-selection-copy">Tu vivras la même aventure et disposeras des mêmes caractéristiques. Seuls ton identité et ton portrait changent.</div>
+
+        <div class="hero-choice-grid">
+          <label class="hero-choice-card ${heroGender(state) === 'female' ? 'selected' : ''}">
+            <input class="hero-gender-input" type="radio" name="heroGenderChoice" value="female" ${heroGender(state) === 'female' ? 'checked' : ''}>
+            <span class="hero-choice-name">Aélis</span>
+            <span class="hero-choice-rank">Écuyère de Sir Aldren de Rochebrune</span>
+          </label>
+          <label class="hero-choice-card ${heroGender(state) === 'male' ? 'selected' : ''}">
+            <input class="hero-gender-input" type="radio" name="heroGenderChoice" value="male" ${heroGender(state) === 'male' ? 'checked' : ''}>
+            <span class="hero-choice-name">Aubin</span>
+            <span class="hero-choice-rank">Écuyer de Sir Aldren de Rochebrune</span>
+          </label>
         </div>
-        <div class="hero-sheet-row"><span class="hero-label">Rang</span><span class="hero-value">Écuyer de Sir Aldren de Rochebrune</span></div>
+
+        <div class="hero-sheet-row"><span class="hero-label">Nom</span><span class="hero-value"><strong>${heroName(state)}</strong></span></div>
+        <div class="hero-sheet-row"><span class="hero-label">Rang</span><span class="hero-value">${heroRank(state)}</span></div>
         <div class="hero-sheet-row"><span class="hero-label">Style</span><span class="hero-value">Vif, prudent et observateur</span></div>
         <div class="hero-sheet-row"><span class="hero-label">Technique de bataille</span><span class="hero-value">Esquive, déplacement rapide et contre-attaque</span></div>
 
@@ -351,26 +388,25 @@ const STORY = {
 
         <div class="hero-characteristics">
           <div class="hero-info-title">Tes caractéristiques</div>
-          <p><strong>Vie :</strong> indique la santé du héros. Lorsqu’elle atteint zéro, ses forces le quittent.</p>
+          <p><strong>Vie :</strong> indique la santé du personnage. Lorsqu’elle atteint zéro, ses forces le quittent.</p>
           <p><strong>Protection :</strong> provient de certaines pièces d’équipement. Elle absorbe les dégâts avant la Vie et diminue lorsqu’elle encaisse un choc.</p>
           <p><strong>Chance :</strong> permet de se sortir habilement d’un mauvais tour ou d’une situation qui semblait mal engagée.</p>
-          <p><strong>Force :</strong> représente la puissance physique du héros. Elle contribue aux dégâts qu’il inflige et lui permet de forcer, retenir ou briser ce qui lui barre la route.</p>
-          <p><strong>Dextérité :</strong> représente son aisance et ses réflexes. Elle permet de prendre l’avantage au combat, mais aussi d’éviter pièges, chutes et autres dangers. La Dextérité du héros peut être affectée par ce qu’il porte, par exemple une arme lourde.</p>
-          <p><strong>Puissance de l’arme :</strong> valeur propre à l’arme équipée. Elle s’ajoute au bonus de Force lorsque le héros remporte un échange.</p>
+          <p><strong>Force :</strong> représente sa puissance physique. Elle contribue aux dégâts infligés et permet de forcer, retenir ou briser ce qui barre la route.</p>
+          <p><strong>Dextérité :</strong> représente son aisance et ses réflexes. Elle permet de prendre l’avantage au combat, mais aussi d’éviter pièges, chutes et autres dangers. Elle peut être affectée par ce qui est porté, par exemple une arme lourde.</p>
+          <p><strong>Puissance de l’arme :</strong> valeur propre à l’arme équipée. Elle s’ajoute au bonus de Force lorsque le personnage remporte un échange.</p>
         </div>
 
         <div class="combat-rules-card">
           <div class="combat-rules-title">Règles des combats</div>
-          <p><strong>Combats :</strong> héros et adversaire lancent chacun 2 dés et ajoutent leur Dextérité.<br>Le meilleur score remporte l’échange.<br>En cas d’égalité, personne n’est blessé.<br>Le gagnant inflige son <strong>bonus de Force + la Puissance de son arme</strong> s’il en possède une.<br><span class="combat-detail">Bonus de Force = Force ÷ 4, arrondi à l’inférieur, avec un minimum de 1.</span></p>
+          <p><strong>Combats :</strong> personnage et adversaire lancent chacun 2 dés et ajoutent leur Dextérité.<br>Le meilleur score remporte l’échange.<br>En cas d’égalité, personne n’est blessé.<br>Le gagnant inflige son <strong>bonus de Force + la Puissance de son arme</strong> s’il en possède une.<br><span class="combat-detail">Bonus de Force = Force ÷ 4, arrondi à l’inférieur, avec un minimum de 1.</span></p>
         </div>
 
         <div class="hero-weapon">Au départ, tu ne portes encore aucune arme.</div>
       </div>
       <p>Sir Aldren t’a ordonné de rester au village. Pourtant, la nuit est tombée depuis longtemps et son cheval vient de revenir seul.</p>
     `,
-    choices: [{ label: 'Commencer l’aventure', to: 'c1' }]
+    choices: [{ label: 'Commencer l’aventure', to: 'c1', effect: s => setHeroIdentity(s, heroGender(s)) }]
   },
-
   c1: {
     number: 'PAGE 1',
     title: 'Le cheval revenu seul',
@@ -3634,7 +3670,7 @@ const STORY = {
     title: 'Ton nom',
     image: 'Ton nom',
     text: state => {
-      const hero = escapeHtml((state.heroName || 'ÉCUYER').trim() || 'ÉCUYER').toUpperCase();
+      const hero = escapeHtml(heroName(state)).toUpperCase();
       return `
         <p><strong>${hero}.</strong></p>
 
@@ -3779,7 +3815,7 @@ const STORY = {
 
       <p>Puis, à ta droite :</p>
 
-      <blockquote>« ${escapeHtml(state.heroName || 'Écuyer')} ? »</blockquote>
+      <blockquote>« ${escapeHtml(heroName(state))} ? »</blockquote>
 
       <p>La voix de Sir Aldren.</p>
 
@@ -3891,7 +3927,7 @@ const STORY = {
     text: state => `
       <p>Tu continues sans toucher la poignée.</p>
 
-      <blockquote>« ${escapeHtml(state.heroName || 'Écuyer')}… »</blockquote>
+      <blockquote>« ${escapeHtml(heroName(state))}… »</blockquote>
 
       <p>La voix d’Aldren reste derrière toi.</p>
 
@@ -4512,7 +4548,8 @@ const STORY = {
     const base = seriesProfile.baseStats || {};
     return {
       node: 'start',
-      heroName: seriesProfile.heroName || '',
+      heroGender: seriesProfile.heroGender === 'male' ? 'male' : 'female',
+      heroName: seriesProfile.heroGender === 'male' ? 'Aubin' : 'Aélis',
       inventory: {},
       flags: {},
       visited: {},
@@ -4804,8 +4841,11 @@ const STORY = {
     }
     return `
       <div class="character-modal-sheet">
-        <div class="character-modal-name">${escapeHtml(state.heroName || 'Écuyer sans nom')}</div>
-        <div class="character-modal-rank">Écuyer de Sir Aldren de Rochebrune</div>
+        <div class="character-modal-portrait">
+          <img src="./books/ecuyer/01-la-grotte-de-valombre/images/${heroPortraitFilename(state)}" alt="Portrait de ${heroName(state)}" onerror="this.parentElement.style.display='none'">
+        </div>
+        <div class="character-modal-name">${heroName(state)}</div>
+        <div class="character-modal-rank">${heroRank(state)}</div>
         <div class="character-modal-stats">
           <div><span>♥ Vie</span><strong>${state.hp} / ${state.maxHp}</strong></div>
           <div><span>🛡 Protection</span><strong>${currentProtection(state)} / ${maxProtection(state)}</strong></div>
@@ -4832,15 +4872,15 @@ const STORY = {
     title: 'La Grotte de Valombre',
     description: 'Première aventure de la série de l’Écuyer.',
     access: 'free',
-    contentVersion: 18,
-    saveVersion: 15,
+    contentVersion: 19,
+    saveVersion: 17,
     assetBase: './books/ecuyer/01-la-grotte-de-valombre/images',
     story: STORY,
     pageOrder: PAGE_ORDER,
     pageByNode: PAGE_BY_NODE,
     padPage,
     imageBaseForPage: n => `La-Grotte-de-Valombre-${padPage(n)}`,
-    imageExtensions: ['webp', 'png', 'jpg', 'jpeg'],
+    imageExtensions: ['png'],
     createInitialState,
     rules: { currentForce, currentDexterity, combatPower, weaponLabel, currentProtection, maxProtection, applyDamage },
     characterSheetHtml,

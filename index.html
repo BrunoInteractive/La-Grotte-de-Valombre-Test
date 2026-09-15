@@ -1226,6 +1226,80 @@ button { font: inherit; }
   .character-modal-stats { grid-template-columns:1fr; }
   .inventory-equipment-row { align-items:flex-start; }
 }
+
+
+/* V34 — choix Aélis / Aubin et portrait horizontal de la fiche perso */
+.hero-selection-title {
+  font-family: var(--display-font);
+  font-size: 22px;
+  font-weight: 700;
+  color: #4f3725;
+  text-align: center;
+  margin: 2px 0 5px;
+}
+.hero-selection-copy {
+  color: #6a5845;
+  text-align: center;
+  line-height: 1.45;
+  margin: 0 auto 14px;
+  max-width: 560px;
+}
+.hero-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.hero-choice-card {
+  position: relative;
+  display: grid;
+  gap: 3px;
+  padding: 12px 13px;
+  border: 1px solid rgba(118,91,58,.50);
+  background: rgba(255,255,255,.07);
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.hero-choice-card.selected {
+  border-color: #725536;
+  background: rgba(139,101,60,.12);
+  box-shadow: inset 0 0 0 2px rgba(114,85,54,.10);
+}
+.hero-choice-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.hero-choice-name {
+  font-family: var(--display-font);
+  font-size: 22px;
+  font-weight: 700;
+  color: #4f3725;
+}
+.hero-choice-rank {
+  color: #6b5a45;
+  font-size: 14px;
+  line-height: 1.3;
+}
+.character-modal-portrait {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  margin: 0 0 14px;
+  border: 1px solid rgba(114,85,54,.55);
+  background: rgba(54,39,27,.12);
+}
+.character-modal-portrait img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center 35%;
+}
+@media (max-width: 620px) {
+  .hero-choice-grid { grid-template-columns: 1fr; }
+  .character-modal-portrait { aspect-ratio: 16 / 8.5; }
+}
 </style>
 </head>
 <body>

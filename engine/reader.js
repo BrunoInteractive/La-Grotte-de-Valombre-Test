@@ -53,7 +53,8 @@ function defaultSeriesProfile() {
   return {
     version: 2,
     seriesId: BOOK.seriesId,
-    heroName: '',
+    heroGender: 'female',
+    heroName: 'Aélis',
     baseStats: { maxHp: 18, chance: 12, force: 8, dexterity: 13 },
     memory: {},
     completedBooks: []
@@ -106,7 +107,8 @@ function saveSeriesProfile() {
   try { localStorage.setItem(SERIES_KEY, JSON.stringify(seriesProfile)); } catch (e) {}
 }
 function syncSeriesFromState() {
-  seriesProfile.heroName = state.heroName || seriesProfile.heroName || '';
+  seriesProfile.heroGender = state.heroGender === 'male' ? 'male' : 'female';
+  seriesProfile.heroName = state.heroName || (seriesProfile.heroGender === 'male' ? 'Aubin' : 'Aélis');
   seriesProfile.baseStats = {
     maxHp: state.maxHp || seriesProfile.baseStats.maxHp,
     chance: state.chance || seriesProfile.baseStats.chance,
@@ -215,8 +217,14 @@ function render() {
   chapterTitle.textContent = node.title || '';
   storyText.innerHTML = typeof node.text === 'function' ? node.text(state) : node.text;
 
-  const heroNameInput = document.getElementById('heroNameInput');
-  if (heroNameInput) heroNameInput.addEventListener('input', event => { state.heroName = event.target.value.slice(0,24); saveState(); });
+  document.querySelectorAll('.hero-gender-input').forEach(input => {
+    input.addEventListener('change', event => {
+      state.heroGender = event.target.value === 'male' ? 'male' : 'female';
+      state.heroName = state.heroGender === 'male' ? 'Aubin' : 'Aélis';
+      saveState();
+      render();
+    });
+  });
 
   inventoryCount.textContent = Object.keys(state.inventory).length;
   statusTags.innerHTML = '';

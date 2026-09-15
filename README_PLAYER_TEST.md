@@ -10,7 +10,7 @@ Cette build est dérivée de la V32 — démo joueurs jusqu’à la page 40
 - la démo s’arrête à la découverte des trois grandes routes ;
 - pages 12, 16, 31, 32, 34, 35 et 39 volontairement sans illustration ;
 - page 37 : description de la présence dans la fissure simplifiée ;
-- aucune illustration fournie : déposer les `.webp` dans `books/ecuyer/01-la-grotte-de-valombre/images/`.
+- aucune illustration fournie : déposer les `.png` dans `books/ecuyer/01-la-grotte-de-valombre/images/`.
 
 ## V33
 - Les rencontres de village déjà visitées disparaissent ensuite des choix.
