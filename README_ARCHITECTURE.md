@@ -165,3 +165,7 @@ Les créatures sont décrites par impressions contradictoires et détails diffic
 - Les autres routes enrichissent ensuite la compréhension lors des parties suivantes, sans être obligatoires.
 - Le nom du héros reste gravé dans la Salle des noms : il indique que le lien avec ce qui appelle sous la montagne a déjà commencé, sans expliquer encore son mécanisme.
 - La dernière gravure de la Salle de veille prépare la recherche de la Lame noire et la descente vers la prochaine zone, destinée à être plus orientée action et combat.
+
+## V27 — Rochebrume : continuité d’état
+- Élias mémorise l’annonce de la mort de Gaspard.
+- L’étranger ne réapparaît plus après sa disparition.

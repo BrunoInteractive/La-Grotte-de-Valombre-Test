@@ -1029,7 +1029,15 @@ const STORY = {
     number: 'PAGE 15',
     title: 'Rochebrume',
     image: 'Rochebrume',
-    text: `
+    text: state => state.flags.strangerGone ? `
+      <p>La rue de Rochebrume est toujours aussi vide.</p>
+
+      <p>La taverne de Gaspard Vellin reste ouverte.</p>
+
+      <p>Au croisement, là où se tenait l’étranger quelques instants plus tôt, il n’y a plus personne.</p>
+
+      <p>Seulement la route vide.</p>
+    ` : `
       <p>Le village est désert.</p>
 
       <p>Pas silencieux.</p>
@@ -1052,17 +1060,36 @@ const STORY = {
 
       <p>Et plus loin, une personne se tient seule au milieu de la rue.</p>
     `,
-    choices: [
-      { label: 'Entrer dans la taverne de Gaspard', to: 'c16' },
-      { label: 'Parler à la personne dans la rue', to: 'c19' }
-    ]
+    choices: state => {
+      const list = [
+        { label: 'Entrer dans la taverne de Gaspard', to: 'c16' }
+      ];
+      if (!state.flags.strangerGone) {
+        list.push({ label: 'Parler à la personne dans la rue', to: 'c19' });
+      } else {
+        list.push({ label: 'Quitter Rochebrume et repartir vers la grotte', to: 'c20' });
+      }
+      return list;
+    }
   },
 
   c16: {
     number: 'PAGE 16',
     title: 'La taverne',
     image: 'La taverne de Rochebrume',
-    text: `
+    text: state => state.flags.gaspardDeathAnnounced ? `
+      <p>Tu pousses de nouveau la porte de la taverne.</p>
+
+      <p>Élias est toujours derrière le comptoir.</p>
+
+      <p>Il a cessé de trembler, mais son visage s’est fermé.</p>
+
+      <p>Lorsqu’il te voit revenir, il relève les yeux un instant.</p>
+
+      <p>Il ne te demande rien.</p>
+
+      <p>Le silence entre vous suffit.</p>
+    ` : `
       <p>Tu pousses la porte.</p>
 
       <p>Un jeune homme lève immédiatement les yeux.</p>
@@ -1087,16 +1114,29 @@ const STORY = {
 
       <blockquote>« Avec lui, ça ne veut pas forcément dire grand-chose. Quand il trouve quelqu’un avec qui boire, il oublie parfois jusqu’au chemin de sa propre maison. »</blockquote>
     `,
-    choices: [
-      { label: 'Lui annoncer que Gaspard est mort', to: 'c17' },
-      { label: 'Ne rien lui dire', to: 'c18' }
-    ]
+    choices: state => {
+      if (state.flags.gaspardDeathAnnounced) {
+        const list = [
+          { label: 'Lui demander s’il a quelque chose qui pourrait t’aider pour la montagne', to: 'c18' }
+        ];
+        if (!state.flags.strangerGone) {
+          list.push({ label: 'Aller parler à la personne dans la rue', to: 'c19' });
+        }
+        list.push({ label: 'Quitter Rochebrume et repartir vers la grotte', to: 'c20' });
+        return list;
+      }
+      return [
+        { label: 'Lui annoncer que Gaspard est mort', to: 'c17' },
+        { label: 'Ne rien lui dire', to: 'c18' }
+      ];
+    }
   },
 
   c17: {
     number: 'PAGE 17',
     title: 'La nouvelle',
     image: 'La nouvelle',
+    onEnter: s => { s.flags.gaspardDeathAnnounced = true; },
     text: `
       <p>Tu lui expliques ce que tu as trouvé sur le chemin.</p>
 
@@ -1146,7 +1186,27 @@ const STORY = {
     number: 'PAGE 18',
     title: 'Les lames d’Élias',
     image: 'Les lames d’Élias',
-    text: state => `
+    text: state => state.flags.gaspardDeathAnnounced ? `
+      <p>Tu t’apprêtes à repartir.</p>
+
+      <p>Le regard d’Élias tombe sur ton épée.</p>
+
+      <blockquote>« Attends. »</blockquote>
+
+      <p>Il hésite, puis ouvre un tiroir sous le comptoir.</p>
+
+      <p>Plusieurs petites lames sont soigneusement alignées à l’intérieur.</p>
+
+      <blockquote>« Gaspard gardait ça pour les voyageurs. »</blockquote>
+
+      <blockquote>« Ça ne tue pas grand-chose, mais lancé au visage, ça peut te donner quelques secondes. »</blockquote>
+
+      <p>Il garde les yeux sur les lames.</p>
+
+      <blockquote>« Une pièce d’or la lame. »</blockquote>
+
+      <p><strong>Tu possèdes ${state.goldCoins} pièce${state.goldCoins > 1 ? 's' : ''} d’or.</strong></p>
+    ` : `
       <p>Tu ne lui dis rien.</p>
 
       <p>Élias soupire.</p>
@@ -1196,6 +1256,7 @@ const STORY = {
     number: 'PAGE 19',
     title: 'L’étranger',
     image: 'L’étranger de Rochebrume',
+    onEnter: s => { s.flags.strangerGone = true; },
     text: `
       <p>La personne se tient toujours au milieu de la rue.</p>
 
@@ -1272,7 +1333,8 @@ const STORY = {
       <p>Il n’y a personne.</p>
 
       <p>Seulement la route vide.</p>
-    `,    choices: [
+    `,
+    choices: [
       { label: 'Entrer dans la taverne de Gaspard avant de repartir', to: 'c16' },
       { label: 'Repartir vers la grotte', to: 'c20' }
     ]

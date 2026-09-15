@@ -8,3 +8,5 @@ Cette build est dérivée de la V26 de travail, sans la modifier.
 - aventure limitée aux pages 1 à 20 ;
 - fin de la démo à l’entrée de la grotte ;
 - aucune illustration incluse.
+
+V27 : correctif de continuité à Rochebrume. Élias mémorise l’annonce de la mort de Gaspard et l’étranger ne réapparaît plus après son départ.
