@@ -362,11 +362,13 @@ const STORY = {
         <div class="hero-choice-grid">
           <label class="hero-choice-card ${heroGender(state) === 'female' ? 'selected' : ''}">
             <input class="hero-gender-input" type="radio" name="heroGenderChoice" value="female" ${heroGender(state) === 'female' ? 'checked' : ''}>
+            <span class="hero-choice-portrait"><img src="./books/ecuyer/01-la-grotte-de-valombre/images/La-Grotte-de-Valombre-Hero-Aelis.png" alt="Portrait d’Aélis" onerror="this.parentElement.style.display='none'"></span>
             <span class="hero-choice-name">Aélis</span>
             <span class="hero-choice-rank">Écuyère de Sir Aldren de Rochebrune</span>
           </label>
           <label class="hero-choice-card ${heroGender(state) === 'male' ? 'selected' : ''}">
             <input class="hero-gender-input" type="radio" name="heroGenderChoice" value="male" ${heroGender(state) === 'male' ? 'checked' : ''}>
+            <span class="hero-choice-portrait"><img src="./books/ecuyer/01-la-grotte-de-valombre/images/La-Grotte-de-Valombre-Hero-Aubin.png" alt="Portrait d’Aubin" onerror="this.parentElement.style.display='none'"></span>
             <span class="hero-choice-name">Aubin</span>
             <span class="hero-choice-rank">Écuyer de Sir Aldren de Rochebrune</span>
           </label>
@@ -388,7 +390,7 @@ const STORY = {
 
         <div class="hero-characteristics">
           <div class="hero-info-title">Tes caractéristiques</div>
-          <p><strong>Vie :</strong> indique la santé du personnage. Lorsqu’elle atteint zéro, ses forces le quittent.</p>
+          <p><strong>Vie :</strong> indique la santé du personnage. Lorsqu’elle atteint zéro, c’est la fin de votre aventure.</p>
           <p><strong>Protection :</strong> provient de certaines pièces d’équipement. Elle absorbe les dégâts avant la Vie et diminue lorsqu’elle encaisse un choc.</p>
           <p><strong>Chance :</strong> permet de se sortir habilement d’un mauvais tour ou d’une situation qui semblait mal engagée.</p>
           <p><strong>Force :</strong> représente sa puissance physique. Elle contribue aux dégâts infligés et permet de forcer, retenir ou briser ce qui barre la route.</p>

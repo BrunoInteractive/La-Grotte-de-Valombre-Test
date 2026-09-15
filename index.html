@@ -1228,7 +1228,7 @@ button { font: inherit; }
 }
 
 
-/* V34 — choix Aélis / Aubin et portrait horizontal de la fiche perso */
+/* V36 — portraits de choix verticaux + portrait horizontal plus haut dans la fiche perso */
 .hero-selection-title {
   font-family: var(--display-font);
   font-size: 22px;
@@ -1276,6 +1276,23 @@ button { font: inherit; }
   font-weight: 700;
   color: #4f3725;
 }
+
+.hero-choice-portrait {
+  width: min(100%, 180px);
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  justify-self: center;
+  margin: 0 0 9px;
+  border: 1px solid rgba(114,85,54,.42);
+  background: rgba(54,39,27,.10);
+}
+.hero-choice-portrait img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center 32%;
+}
 .hero-choice-rank {
   color: #6b5a45;
   font-size: 14px;
@@ -1283,7 +1300,7 @@ button { font: inherit; }
 }
 .character-modal-portrait {
   width: 100%;
-  aspect-ratio: 16 / 9;
+  height: clamp(205px, 34vw, 260px);
   overflow: hidden;
   margin: 0 0 14px;
   border: 1px solid rgba(114,85,54,.55);
@@ -1298,7 +1315,7 @@ button { font: inherit; }
 }
 @media (max-width: 620px) {
   .hero-choice-grid { grid-template-columns: 1fr; }
-  .character-modal-portrait { aspect-ratio: 16 / 8.5; }
+  .character-modal-portrait { height: 210px; }
 }
 </style>
 </head>

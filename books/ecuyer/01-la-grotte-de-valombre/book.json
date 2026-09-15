@@ -4,11 +4,11 @@
   "orderInSeries": 1,
   "title": "La Grotte de Valombre",
   "access": "free",
-  "contentVersion": 19,
+  "contentVersion": 20,
   "entry": "book.js",
   "assetBase": "images",
   "episode": 1,
   "slug": "la-grotte-de-valombre",
   "saveVersion": 17,
-  "buildLabel": "V35 — Test joueurs page 40 + images PNG"
+  "buildLabel": "V36 — Test joueurs page 40 + portraits personnage"
 }

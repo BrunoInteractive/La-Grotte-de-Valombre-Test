@@ -52,4 +52,4 @@ Déposer séparément dans `books/ecuyer/01-la-grotte-de-valombre/images/` :
 - `La-Grotte-de-Valombre-Hero-Aelis.png`
 - `La-Grotte-de-Valombre-Hero-Aubin.png`
 
-Les portraits ne sont pas inclus dans ce ZIP. La fiche perso les affiche en cadrage horizontal 16:9 avec `object-fit: cover`.
+Les portraits ne sont pas inclus dans ce ZIP. Les mêmes fichiers servent au choix du personnage (recadrage vertical dans chaque bulle) et à la fiche perso (recadrage horizontal plus haut avec `object-fit: cover`).
