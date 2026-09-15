@@ -887,7 +887,7 @@ const STORY = {
     `,
     choices: state => {
       if (!hasDamageRoll(state, 'c12')) {
-        return [{ label: 'Lancer le dé de blessure', action: 'damage', damageKey: 'c12' }];
+        return [{ label: 'Lancer le dé à 3 faces de blessure', action: 'damage', damageKey: 'c12', damageSides: 3 }];
       }
       if (state.hp <= 0) return fatalChoices();
       return [
@@ -1116,14 +1116,22 @@ const STORY = {
     `,
     choices: state => {
       if (state.flags.gaspardDeathAnnounced) {
-        const list = [
-          { label: 'Lui demander s’il a quelque chose qui pourrait t’aider pour la montagne', to: 'c18' }
-        ];
+        const list = [];
+        if (!state.flags.eliasBladesPurchased) {
+          list.push({ label: 'Lui demander s’il a quelque chose qui pourrait t’aider pour la montagne', to: 'c18' });
+        }
         if (!state.flags.strangerGone) {
           list.push({ label: 'Aller parler à la personne dans la rue', to: 'c19' });
         }
         list.push({ label: 'Quitter Rochebrume et repartir vers la grotte', to: 'c20' });
         return list;
+      }
+      if (state.flags.eliasBladesPurchased) {
+        return [
+          { label: 'Lui annoncer que Gaspard est mort', to: 'c17' },
+          { label: 'Ne rien ajouter et retourner dans la rue', to: 'c15' },
+          { label: 'Quitter Rochebrume et repartir vers la grotte', to: 'c20' }
+        ];
       }
       return [
         { label: 'Lui annoncer que Gaspard est mort', to: 'c17' },
@@ -1186,7 +1194,13 @@ const STORY = {
     number: 'PAGE 18',
     title: 'Les lames d’Élias',
     image: 'Les lames d’Élias',
-    text: state => state.flags.gaspardDeathAnnounced ? `
+    text: state => state.flags.eliasBladesPurchased ? `
+      <p>Élias jette un regard vers le tiroir sous le comptoir, puis le laisse fermé.</p>
+
+      <p>Les lames qu’il a accepté de te vendre sont déjà en ta possession.</p>
+
+      <p>Il n’en propose pas davantage.</p>
+    ` : state.flags.gaspardDeathAnnounced ? `
       <p>Tu t’apprêtes à repartir.</p>
 
       <p>Le regard d’Élias tombe sur ton épée.</p>
@@ -1228,6 +1242,13 @@ const STORY = {
       <p><strong>Tu possèdes ${state.goldCoins} pièce${state.goldCoins > 1 ? 's' : ''} d’or.</strong></p>
     `,
     choices: state => {
+      if (state.flags.eliasBladesPurchased) {
+        return [
+          { label: 'Retourner dans la rue', to: 'c15' },
+          { label: 'Repartir vers la grotte', to: 'c20' }
+        ];
+      }
+
       const list = [];
       const maxBuy = Math.min(3, state.goldCoins);
 
@@ -1238,6 +1259,7 @@ const STORY = {
           effect: s => {
             s.goldCoins -= qty;
             s.throwingBlades += qty;
+            s.flags.eliasBladesPurchased = true;
             syncThrowingBlades(s);
           }
         });
@@ -4807,8 +4829,8 @@ const STORY = {
     title: 'La Grotte de Valombre',
     description: 'Première aventure de la série de l’Écuyer.',
     access: 'free',
-    contentVersion: 13,
-    saveVersion: 1,
+    contentVersion: 14,
+    saveVersion: 2,
     assetBase: './books/ecuyer/01-la-grotte-de-valombre/images',
     story: STORY,
     pageOrder: PAGE_ORDER,

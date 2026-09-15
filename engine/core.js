@@ -25,19 +25,23 @@ function addItem(state, id, name, description, extra = {}) {
 function removeItem(state, id) { delete state.inventory[id]; }
 function hasItem(state, id) { return !!state.inventory[id]; }
 
-function cryptoDie6() {
+function cryptoDie(sides = 6) {
+  const faces = Math.max(2, Math.floor(Number(sides) || 6));
   if (window.crypto && window.crypto.getRandomValues) {
     const buffer = new Uint32Array(1);
-    const limit = 4294967292;
+    const range = 4294967296;
+    const limit = range - (range % faces);
     let value;
     do {
       window.crypto.getRandomValues(buffer);
       value = buffer[0];
     } while (value >= limit);
-    return (value % 6) + 1;
+    return (value % faces) + 1;
   }
-  return Math.floor(Math.random() * 6) + 1;
+  return Math.floor(Math.random() * faces) + 1;
 }
+
+function cryptoDie6() { return cryptoDie(6); }
 
 function roll3D6(state, statName, statValue) {
   const dice = [cryptoDie6(), cryptoDie6(), cryptoDie6()];
@@ -56,12 +60,16 @@ function hasDamageRoll(state, key) {
   ensureDamageRolls(state);
   return Number.isInteger(state.damageRolls[key]);
 }
-function rollDamage(state, key) {
+function rollDamage(state, key, sides = 6) {
   ensureDamageRolls(state);
   if (hasDamageRoll(state, key)) return state.damageRolls[key];
-  const damage = cryptoDie6();
+  const faces = Math.max(2, Math.floor(Number(sides) || 6));
+  const damage = cryptoDie(faces);
   state.damageRolls[key] = damage;
+  if (!state.damageRollSides || typeof state.damageRollSides !== 'object') state.damageRollSides = {};
+  state.damageRollSides[key] = faces;
   state.lastDamageDie = damage;
+  state.lastDamageSides = faces;
   state.lastDamageKey = key;
   if (!state.damageRollResults || typeof state.damageRollResults !== 'object') state.damageRollResults = {};
   const book = window.GameRuntime && GameRuntime.activeBook;
@@ -95,10 +103,12 @@ function damageResultHtml(state, key) {
     : { absorbed: 0, hpLost: damage };
   const loss = Number.isFinite(resolution.hpLost) ? resolution.hpLost : damage;
   const protectionLine = resolution.absorbed > 0
-    ? `<p><strong>Ta protection absorbe ${resolution.absorbed} point${resolution.absorbed > 1 ? 's' : ''}.</strong>${loss > 0 ? ` Tu perds ${loss} point${loss > 1 ? 's' : ''} de Vie.` : ' Tu ne perds aucun point de Vie.'}</p>`
-    : `<p><strong>Tu perds ${loss} point${loss > 1 ? 's' : ''} de Vie.</strong></p>`;
+    ? `<p><strong>Ta protection a absorbé ${resolution.absorbed} point${resolution.absorbed > 1 ? 's' : ''}.</strong>${loss > 0 ? ` Tu as perdu ${loss} point${loss > 1 ? 's' : ''} de Vie.` : ' Tu n’as perdu aucun point de Vie.'}</p>`
+    : `<p><strong>Tu as perdu ${loss} point${loss > 1 ? 's' : ''} de Vie.</strong></p>`;
   const fatal = state.hp <= 0 ? `<p><strong>Ta Vie tombe à 0.</strong></p>` : '';
-  return `<div class="dice-result"><p class="roll-number">Dé de blessure</p><div class="dice-faces">${renderDie(damage)}</div><p><strong>Résultat : ${damage}</strong></p>${protectionLine}<p>Vie : <strong>${state.hp} / ${state.maxHp}</strong></p>${fatal}</div>`;
+  const sides = state.damageRollSides && Number.isInteger(state.damageRollSides[key]) ? state.damageRollSides[key] : 6;
+  const dieLabel = sides === 6 ? 'Dé de blessure' : `Dé de blessure à ${sides} faces`;
+  return `<div class="dice-result"><p class="roll-number">${dieLabel}</p><div class="dice-faces">${renderDie(damage)}</div><p><strong>Résultat : ${damage}</strong></p>${protectionLine}<p>Vie : <strong>${state.hp} / ${state.maxHp}</strong></p>${fatal}</div>`;
 }
 
 function fatalChoices() {

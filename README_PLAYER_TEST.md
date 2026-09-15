@@ -10,3 +10,7 @@ Cette build est dérivée de la V26 de travail, sans la modifier.
 - aucune illustration incluse.
 
 V27 : correctif de continuité à Rochebrume. Élias mémorise l’annonce de la mort de Gaspard et l’étranger ne réapparaît plus après son départ.
+
+### Correctifs V28
+- Blessure de la page 12 : D3 (1 à 3 dégâts).
+- Les lames d'Élias ne peuvent être achetées qu'une seule fois au cours de la partie.

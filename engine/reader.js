@@ -231,7 +231,7 @@ function render() {
     btn.addEventListener('click', () => {
       if (choice.action === 'checkpoint') return restartFromCheckpoint();
       if (choice.action === 'restart') return restartGame();
-      if (choice.action === 'damage') { rollDamage(state, choice.damageKey || state.node); saveState(); render(); return; }
+      if (choice.action === 'damage') { rollDamage(state, choice.damageKey || state.node, choice.damageSides || 6); saveState(); render(); return; }
       if (typeof choice.effect === 'function') choice.effect(state);
       enterNode(choice.to);
     });
