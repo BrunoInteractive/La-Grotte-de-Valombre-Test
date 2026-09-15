@@ -169,3 +169,12 @@ Les créatures sont décrites par impressions contradictoires et détails diffic
 ## V27 — Rochebrume : continuité d’état
 - Élias mémorise l’annonce de la mort de Gaspard.
 - L’étranger ne réapparaît plus après sa disparition.
+
+
+## V29 — actions sur place
+- Les objets ramassables peuvent utiliser `stay: true` : l'effet est appliqué puis la page courante est simplement réaffichée, sans navigation vers une autre page.
+- Page 30 : le casque cabossé est désormais ramassé sur place ; le bouton disparaît ensuite et l'illustration de la page 30 reste affichée.
+
+
+### V30 — démo page 40
+La démo joueur se poursuit désormais dans les premières galeries et s’arrête à la page 40. Les pages marquées `noImage: true` sont rendues en texte seul.

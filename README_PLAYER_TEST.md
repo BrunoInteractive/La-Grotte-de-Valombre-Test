@@ -1,16 +1,13 @@
-# Version test joueurs — entrée de la grotte
+# Version test joueurs — jusqu’à la page 40
 
-Cette build est dérivée de la V26 de travail, sans la modifier.
+Cette build est dérivée de la V30 de travail et reste indépendante de celle-ci.
 
-- progression normale : inventaire vide au départ, objets acquis uniquement par le récit ;
+- progression normale : aucun objet de test accordé au départ ;
+- objets acquis uniquement par les choix du récit ;
 - navigation directe entre les pages désactivée ;
 - sauvegarde isolée de la version de travail ;
-- aventure limitée aux pages 1 à 20 ;
-- fin de la démo à l’entrée de la grotte ;
-- aucune illustration incluse.
-
-V27 : correctif de continuité à Rochebrume. Élias mémorise l’annonce de la mort de Gaspard et l’étranger ne réapparaît plus après son départ.
-
-### Correctifs V28
-- Blessure de la page 12 : D3 (1 à 3 dégâts).
-- Les lames d'Élias ne peuvent être achetées qu'une seule fois au cours de la partie.
+- aventure jouable normalement jusqu’à la page 40, **Le monde sous la montagne** ;
+- la démo s’arrête à la découverte des trois grandes routes ;
+- pages 12, 16, 31, 32, 34, 35 et 39 volontairement sans illustration ;
+- page 37 : description de la présence dans la fissure simplifiée ;
+- aucune illustration fournie : déposer les `.webp` dans `books/ecuyer/01-la-grotte-de-valombre/images/`.

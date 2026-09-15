@@ -836,6 +836,7 @@ const STORY = {
   c12: {
     number: 'PAGE 12',
     title: 'Une voix sous la terre',
+    noImage: true,
     image: 'Une voix sous la terre',
     onEnter: s => {
       s.dexPenalty = Math.min(6, (s.dexPenalty || 0) + 1);
@@ -1076,6 +1077,7 @@ const STORY = {
   c16: {
     number: 'PAGE 16',
     title: 'La taverne',
+    noImage: true,
     image: 'La taverne de Rochebrume',
     text: state => state.flags.gaspardDeathAnnounced ? `
       <p>Tu pousses de nouveau la porte de la taverne.</p>
@@ -1377,16 +1379,16 @@ const STORY = {
 
       <p>Tu es arrivé à l’entrée de la grotte.</p>
 
-      <p>Devant toi, l’ouverture noire semble absorber les derniers reflets du jour. Une odeur de roche humide, mêlée à quelque chose de plus âcre, s’en échappe.</p>
+      <p>Tu t’y engages avec prudence. Après quelques pas à peine, deux chemins s’offrent à toi.</p>
 
-      <p>Tu poses une main sur la garde de ton épée.</p>
+      <p>L’un <strong>descend</strong> dans l’obscurité, et de ce passage monte une <strong>forte odeur de soufre</strong>.</p>
 
-      <p>Sir Aldren est quelque part là-dedans.</p>
+      <p>L’autre continue tout droit et semble s’enfoncer dans un passage beaucoup plus étroit.</p>
 
-      <p class="ending">FIN DE CETTE VERSION D’ESSAI</p>
     `,
     choices: [
-      { label: 'Recommencer l’aventure', action: 'restart' }
+      { label: 'Descendre dans le passage où l’odeur de soufre est la plus forte', to: 'c21' },
+      { label: 'Prendre le passage étroit qui continue tout droit', to: 'c22' }
     ]
   },
 
@@ -1757,7 +1759,7 @@ const STORY = {
       if (!hasItem(state, 'casque_cabosse')) {
         list.push({
           label: 'Ramasser le casque cabossé (+2 Protection)',
-          to: 'c28',
+          stay: true,
           effect: s => addProtectiveItem(s, 'casque_cabosse', 'Casque cabossé', 'Un casque de fer ancien mais encore solide. Il peut absorber 2 points de dégâts avant ta Vie.', 2)
         });
       }
@@ -1771,6 +1773,7 @@ const STORY = {
   c31: {
     number: 'PAGE 31',
     title: 'La galerie condamnée',
+    noImage: true,
     image: 'La galerie condamnée',
     text: state => `
       <p>Tu t’engages dans la galerie de droite.</p>
@@ -1801,6 +1804,7 @@ const STORY = {
   c32: {
     number: 'PAGE 32',
     title: 'La pierre',
+    noImage: true,
     image: 'La pierre',
     onEnter: s => {
       if (s.lastCombatOutcome === 'force_success' && !s.flags.brassardPris) {
@@ -1926,6 +1930,7 @@ const STORY = {
   c34: {
     number: 'PAGE 34',
     title: 'Le tunnel voisin',
+    noImage: true,
     image: 'Le tunnel voisin',
     text: `
       <p>Tu laisses la lumière du feu derrière toi et t’engages dans le tunnel voisin.</p>
@@ -1966,6 +1971,7 @@ const STORY = {
   c35: {
     number: 'PAGE 35',
     title: 'Une voix humaine',
+    noImage: true,
     image: 'Une voix humaine',
     text: `
       <p>Tu restes à plusieurs pas de la silhouette.</p>
@@ -2068,11 +2074,11 @@ const STORY = {
 
       <p>Quelque chose de pâle apparaît dans la fente.</p>
 
-      <p>Ton premier réflexe est d’y voir un œil.</p>
+      <p>Cela ressemble fortement à un œil qui te fixe. Un regard glacé, étrangement immobile.</p>
 
-      <p>Mais lorsque tu cherches une paupière, une pupille, quoi que ce soit qui confirmerait cette idée, la chose se retire.</p>
+      <p>Mais tu n’en es pas certain.</p>
 
-      <p>Tu n’es plus certain d’avoir vu un œil du tout.</p>
+      <p>La chose se retire avant que tu puisses comprendre ce que tu as réellement vu.</p>
 
       <p>D’autres frottements lui répondent plus loin.</p>
 
@@ -2163,6 +2169,7 @@ const STORY = {
   c39: {
     number: 'PAGE 39',
     title: 'Ce qui vit entre les pierres',
+    noImage: true,
     image: 'Ce qui vit entre les pierres',
     text: state => {
       const r = diceResultHtml(state);
@@ -2270,11 +2277,11 @@ const STORY = {
       <p>Tu ne pourras pas explorer les trois.</p>
 
       <p>Il faut choisir.</p>
+
+      <p class="ending">FIN DE CETTE VERSION D’ESSAI</p>
     `,
     choices: [
-      { label: 'Descendre vers le lac noir', to: 'c41' },
-      { label: 'Prendre l’escalier de pierre', to: 'c44' },
-      { label: 'Longer la corniche vers le pont', to: 'c55' }
+      { label: 'Recommencer l’aventure', action: 'restart' }
     ]
   },
 
@@ -4829,8 +4836,8 @@ const STORY = {
     title: 'La Grotte de Valombre',
     description: 'Première aventure de la série de l’Écuyer.',
     access: 'free',
-    contentVersion: 14,
-    saveVersion: 2,
+    contentVersion: 15,
+    saveVersion: 3,
     assetBase: './books/ecuyer/01-la-grotte-de-valombre/images',
     story: STORY,
     pageOrder: PAGE_ORDER,

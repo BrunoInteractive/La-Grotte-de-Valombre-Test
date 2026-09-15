@@ -201,8 +201,14 @@ function render() {
   } else {
     const pageNumber = PAGE_BY_NODE[state.node] || 1;
     chapterNumber.textContent = `PAGE ${padPage(pageNumber)}`;
-    imageFrame.classList.remove('hidden');
-    loadPageImage(pageNumber, node.title || '');
+    if (node.noImage) {
+      imageFrame.classList.add('hidden');
+      storyImage.removeAttribute('src');
+      storyImage.classList.add('hidden');
+    } else {
+      imageFrame.classList.remove('hidden');
+      loadPageImage(pageNumber, node.title || '');
+    }
   }
   chapterTitle.textContent = node.title || '';
   storyText.innerHTML = typeof node.text === 'function' ? node.text(state) : node.text;
@@ -225,7 +231,7 @@ function render() {
   availableChoices.forEach((choice, i) => {
     const btn = document.createElement('button');
     btn.className = 'choice-btn';
-    const destinationPage = PAGE_BY_NODE[choice.to];
+    const destinationPage = choice.stay ? null : PAGE_BY_NODE[choice.to];
     const destination = destinationPage ? `<span class="choice-dest">Rendez-vous à la page ${padPage(destinationPage)}</span>` : '';
     btn.innerHTML = `<span class="choice-index">${i + 1}</span><span class="choice-copy"><span>${choice.label}</span>${destination}</span>`;
     btn.addEventListener('click', () => {
@@ -233,6 +239,7 @@ function render() {
       if (choice.action === 'restart') return restartGame();
       if (choice.action === 'damage') { rollDamage(state, choice.damageKey || state.node, choice.damageSides || 6); saveState(); render(); return; }
       if (typeof choice.effect === 'function') choice.effect(state);
+      if (choice.stay) { saveState(); render(); return; }
       enterNode(choice.to);
     });
     choices.appendChild(btn);
