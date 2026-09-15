@@ -455,24 +455,37 @@ const STORY = {
     number: 'PAGE 3',
     title: 'La place de Valombre',
     image: 'La place de Valombre',
-    text: `
-      <p>La place de Valombre est presque déserte. Les volets se ferment les uns après les autres.</p>
-      <p>Sous son auvent, le <strong>marchand</strong> termine de ranger ses affaires. Dans la forge, une lueur rouge éclaire encore les murs.</p>
-      <p>Plus loin, dans l’ombre d’une ruelle, une étrange silhouette semble parler toute seule.</p>
-      <p>Tu peux rencontrer qui tu veux — ou quitter le village immédiatement.</p>
-    `,
-    choices: [
-      { label: 'Voir le marchand', to: 'c4' },
-      { label: 'Voir le forgeron', to: 'c5' },
-      { label: 'Approcher la personne dans la ruelle', to: 'c6' },
-      { label: 'Partir vers la grotte', to: 'c8' }
-    ]
+    text: state => {
+      const details = [];
+      if (!state.flags.merchantVisited) {
+        details.push('<p>Sous son auvent, le <strong>marchand</strong> termine de ranger ses affaires.</p>');
+      }
+      if (!state.flags.blacksmithVisited) {
+        details.push('<p>Dans la forge, une lueur rouge éclaire encore les murs.</p>');
+      }
+      details.push('<p>Plus loin, dans l’ombre d’une ruelle, une étrange silhouette semble parler toute seule.</p>');
+      return `
+        <p>La place de Valombre est presque déserte. Les volets se ferment les uns après les autres.</p>
+        ${details.join('')}
+        <p>Tu peux encore prendre le temps de faire ce qui te semble utile — ou quitter le village.</p>
+      `;
+    },
+    choices: state => {
+      const list = [];
+      if (!state.flags.merchantVisited) list.push({ label: 'Voir le marchand', to: 'c4' });
+      if (!state.flags.blacksmithVisited) list.push({ label: 'Voir le forgeron', to: 'c5' });
+      list.push({ label: 'Approcher la personne dans la ruelle', to: 'c6' });
+      list.push({ label: 'Partir vers la grotte', to: 'c8' });
+      return list;
+    }
   },
 
   c4: {
     number: 'PAGE 4',
     title: 'Le marchand',
+    noImage: true,
     image: 'Le marchand de Valombre',
+    onEnter: s => { s.flags.merchantVisited = true; },
     text: state => {
       if (hasItem(state,'potion_guerison')) {
         return `
@@ -519,6 +532,7 @@ const STORY = {
     number: 'PAGE 5',
     title: 'Le forgeron',
     image: 'Le forgeron de Valombre',
+    onEnter: s => { s.flags.blacksmithVisited = true; },
     text: state => `
       <p>Le forgeron lève immédiatement les yeux lorsque tu entres.</p>
 
@@ -961,69 +975,23 @@ const STORY = {
 
       <p>Le sentier descend rapidement entre les arbres.</p>
 
-      <p>Tu connais cette forêt.</p>
+      <p>Tu connais cette forêt. Enfant, tu l’as traversée plusieurs fois pour rejoindre Rochebrume.</p>
 
-      <p>Ou du moins, tu croyais la connaître.</p>
+      <p>Pourtant, ce soir, elle ne correspond plus tout à fait à ton souvenir.</p>
 
-      <p>Lorsque tu étais enfant, tu l’as traversée plusieurs fois pour rejoindre Rochebrume.</p>
+      <p>Les arbres paraissent trop proches les uns des autres. Leurs troncs se courbent selon des angles étranges, comme s’ils avaient lentement poussé autour de quelque chose enfoui sous la terre.</p>
 
-      <p>Elle n’avait rien de remarquable.</p>
+      <p>Au-dessus de toi, les branches s’entrecroisent jusqu’à presque faire disparaître le ciel.</p>
 
-      <p>Des chênes.</p>
+      <p>Même les distances te troublent. Un arbre que tu crois proche semble reculer à mesure que tu avances.</p>
 
-      <p>Des hêtres.</p>
+      <p>Tu continues sans t’attarder.</p>
 
-      <p>Quelques chemins de chasse.</p>
+      <p>Quelques minutes plus tard, les premières maisons de Rochebrume apparaissent enfin entre les troncs.</p>
 
-      <p>Pourtant, ce soir, quelque chose ne correspond pas à ton souvenir.</p>
-
-      <p>Les arbres paraissent trop proches les uns des autres.</p>
-
-      <p>Leurs troncs poussent selon des angles étranges, comme s’ils s’étaient lentement courbés pour éviter quelque chose situé sous la terre.</p>
-
-      <p>Certaines branches s’entrecroisent si étroitement au-dessus de toi qu’elles dissimulent presque entièrement le ciel.</p>
-
-      <p>Même les distances semblent fausses.</p>
-
-      <p>Un arbre que tu pensais à quelques pas demande une minute entière de marche pour être atteint.</p>
-
-      <p>Puis tu entends un oiseau.</p>
-
-      <p>Trois notes.</p>
-
-      <p>Toujours les mêmes.</p>
-
-      <p>Trois notes espacées exactement de la même manière.</p>
-
-      <p>Encore.</p>
-
-      <p>Encore.</p>
-
-      <p>Encore.</p>
-
-      <p>Tu t’arrêtes.</p>
-
-      <p>Le chant continue.</p>
-
-      <p>Mais tu réalises alors quelque chose qui te glace.</p>
-
-      <p>Le son ne vient jamais du même endroit.</p>
-
-      <p>Il se déplace autour de toi sans que rien ne vole entre les branches.</p>
-
-      <p>Tu reprends ta marche.</p>
-
-      <p>Tu ne regardes plus derrière toi.</p>
-
-      <p>Quelques minutes plus tard, les premières maisons de Rochebrume apparaissent enfin.</p>
-
-      <p>Et là encore…</p>
-
-      <p>quelque chose ne va pas.</p>
+      <p>Et là encore, quelque chose ne va pas.</p>
     `,
-    choices: [
-      { label: 'Entrer dans Rochebrume', to: 'c15' }
-    ]
+    choices: [{ label: 'Entrer dans Rochebrume', to: 'c15' }]
   },
 
   c15: {
@@ -1197,11 +1165,13 @@ const STORY = {
     title: 'Les lames d’Élias',
     image: 'Les lames d’Élias',
     text: state => state.flags.eliasBladesPurchased ? `
-      <p>Élias jette un regard vers le tiroir sous le comptoir, puis le laisse fermé.</p>
+      <p>Élias enveloppe soigneusement les lames dans un morceau de cuir avant de te les tendre.</p>
 
-      <p>Les lames qu’il a accepté de te vendre sont déjà en ta possession.</p>
+      <blockquote>« Garde-les à portée de main. »</blockquote>
 
-      <p>Il n’en propose pas davantage.</p>
+      <p>Tu possèdes maintenant <strong>${state.throwingBlades} lame${state.throwingBlades > 1 ? 's' : ''} de jet</strong>.</p>
+
+      <p>Élias referme le tiroir. Il ne t’en proposera pas davantage.</p>
     ` : state.flags.gaspardDeathAnnounced ? `
       <p>Tu t’apprêtes à repartir.</p>
 
@@ -1257,7 +1227,7 @@ const STORY = {
       for (let qty = 1; qty <= maxBuy; qty++) {
         list.push({
           label: `Acheter ${qty} lame${qty > 1 ? 's' : ''} de jet — ${qty} pièce${qty > 1 ? 's' : ''} d’or`,
-          to: 'c43',
+          stay: true,
           effect: s => {
             s.goldCoins -= qty;
             s.throwingBlades += qty;
@@ -4459,7 +4429,7 @@ const STORY = {
 
 };
 
-  const PAGE_ORDER = Array.from({ length: 20 }, (_, i) => `c${i + 1}`);
+  const PAGE_ORDER = Array.from({ length: 40 }, (_, i) => `c${i + 1}`);
   const PAGE_BY_NODE = Object.fromEntries(PAGE_ORDER.map((id, i) => [id, i + 1]));
   const padPage = n => String(n).padStart(3, '0');
 
@@ -4836,8 +4806,8 @@ const STORY = {
     title: 'La Grotte de Valombre',
     description: 'Première aventure de la série de l’Écuyer.',
     access: 'free',
-    contentVersion: 15,
-    saveVersion: 3,
+    contentVersion: 16,
+    saveVersion: 5,
     assetBase: './books/ecuyer/01-la-grotte-de-valombre/images',
     story: STORY,
     pageOrder: PAGE_ORDER,

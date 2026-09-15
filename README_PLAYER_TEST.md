@@ -1,6 +1,6 @@
 # Version test joueurs — jusqu’à la page 40
 
-Cette build est dérivée de la V30 de travail et reste indépendante de celle-ci.
+Cette build est dérivée de la V32 — démo joueurs jusqu’à la page 40
 
 - progression normale : aucun objet de test accordé au départ ;
 - objets acquis uniquement par les choix du récit ;

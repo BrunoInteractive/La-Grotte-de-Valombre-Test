@@ -4,11 +4,11 @@
   "orderInSeries": 1,
   "title": "La Grotte de Valombre",
   "access": "free",
-  "contentVersion": 15,
+  "contentVersion": 17,
   "entry": "book.js",
   "assetBase": "images",
   "episode": 1,
   "slug": "la-grotte-de-valombre",
-  "saveVersion": 2,
-  "buildLabel": "V30 — démo joueurs jusqu’à la page 40"
+  "saveVersion": 5,
+  "buildLabel": "V32 — démo joueurs jusqu’à la page 40"
 }

@@ -199,7 +199,9 @@ function render() {
     chapterNumber.textContent = 'FICHE DU HÉROS';
     imageFrame.classList.add('hidden');
   } else {
-    const pageNumber = PAGE_BY_NODE[state.node] || 1;
+    const mappedPage = PAGE_BY_NODE[state.node];
+    const declaredPage = node.number ? parseInt(String(node.number).replace(/\D/g, ''), 10) : NaN;
+    const pageNumber = mappedPage || (Number.isFinite(declaredPage) ? declaredPage : 1);
     chapterNumber.textContent = `PAGE ${padPage(pageNumber)}`;
     if (node.noImage) {
       imageFrame.classList.add('hidden');
@@ -333,7 +335,13 @@ function openDrawer() {
     if (current) current.scrollIntoView({ block: 'center' });
   });
 }
-function closeDrawer() { drawer.classList.remove('open'); drawer.setAttribute('aria-hidden','true'); drawerBackdrop.classList.add('hidden'); }
+function closeDrawer() {
+  if (drawer) {
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden','true');
+  }
+  if (drawerBackdrop) drawerBackdrop.classList.add('hidden');
+}
 
 const bookApi = { book: BOOK, saveState, render, openInventory, showModal, closeModal };
 modalContent.addEventListener('click', event => {

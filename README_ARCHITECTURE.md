@@ -176,5 +176,12 @@ Les créatures sont décrites par impressions contradictoires et détails diffic
 - Page 30 : le casque cabossé est désormais ramassé sur place ; le bouton disparaît ensuite et l'illustration de la page 30 reste affichée.
 
 
-### V30 — démo page 40
+### V32 — démo joueurs jusqu’à la page 40
 La démo joueur se poursuit désormais dans les premières galeries et s’arrête à la page 40. Les pages marquées `noImage: true` sont rendues en texte seul.
+
+
+## V32 — démo joueurs jusqu’à la page 40
+- Page 4 sans image.
+- Marchand et forgeron ne sont proposés qu'une seule fois sur la place de Valombre.
+- L'achat des lames d'Élias se fait désormais directement sur la page 18, sans changement de page.
+- La table des pages de la démo est correctement limitée aux pages 1 à 40.
