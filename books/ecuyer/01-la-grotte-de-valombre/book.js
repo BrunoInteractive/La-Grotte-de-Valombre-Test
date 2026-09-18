@@ -602,10 +602,9 @@ const STORY = {
 
       <blockquote>« Je te propose un échange. Elle frappe moins fort… mais entre de bonnes mains, elle frappe beaucoup plus vite. »</blockquote>
 
-      <p><strong>Pour comparer les deux armes :</strong></p>
+      <p>Tu peux désormais choisir entre les deux armes.</p>
       <p><strong>Épée lourde de Sir Aldren</strong> — Puissance : <strong>5</strong> · Dextérité : <strong>9</strong>.</p>
       <p><strong>Épée de la forgeronne</strong> — Puissance : <strong>2</strong> · Dextérité : <strong>12</strong>.</p>
-      <p>Choisis ci-dessous quelle arme tu souhaites emporter.</p>
     `,
     choices: state => {
       if (state.weapon === 'light') {
