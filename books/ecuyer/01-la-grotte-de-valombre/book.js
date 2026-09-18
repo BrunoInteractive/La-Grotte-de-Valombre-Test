@@ -813,6 +813,7 @@ const STORY = {
   c10: {
     number: 'PAGE 10',
     title: '',
+    noImage: true,
     image: 'Le dernier réflexe',
     text: `
       <p>Tu t’accroupis à côté de lui.</p>
@@ -852,6 +853,7 @@ const STORY = {
   c11: {
     number: 'PAGE 11',
     title: '',
+    noImage: true,
     image: 'Le coup',
     text: `
       <p>Tu tires brusquement ton bras et frappes.</p>
@@ -1502,6 +1504,7 @@ const STORY = {
   c24: {
     number: 'PAGE 24',
     title: '',
+    noImage: true,
     image: 'Le grondement dans l’ombre',
     text: state => `
       <p>Tu te tournes vers le grondement, l’épée prête.</p>
