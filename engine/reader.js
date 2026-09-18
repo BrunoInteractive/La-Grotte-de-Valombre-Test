@@ -10,8 +10,16 @@ GameRuntime.setActiveBook(BOOK);
 const STORY = BOOK.story;
 const PAGE_BY_NODE = BOOK.pageByNode;
 const padPage = BOOK.padPage;
-const STORAGE_KEY = `ldveh.book.${BOOK.id}.save.v${BOOK.saveVersion || 1}`;
-const CHECKPOINT_KEY = `ldveh.book.${BOOK.id}.checkpoint.v${BOOK.saveVersion || 1}`;
+// Les sauvegardes des joueurs sont identifiées par le LIVRE, et non par
+// la version du contenu publiée sur GitHub. Ne jamais changer ces clés
+// lorsqu'on ajoute des pages ou que l'on corrige une scène.
+const SAVE_ID = BOOK.stablePlayerSaves ? BOOK.id : null;
+const STORAGE_KEY = SAVE_ID
+  ? `ldveh.book.${SAVE_ID}.save`
+  : `ldveh.book.${BOOK.id}.save.v${BOOK.saveVersion || 1}`;
+const CHECKPOINT_KEY = SAVE_ID
+  ? `ldveh.book.${SAVE_ID}.checkpoint`
+  : `ldveh.book.${BOOK.id}.checkpoint.v${BOOK.saveVersion || 1}`;
 const SERIES_KEY = `ldveh.series.${BOOK.seriesId}.profile.v2`;
 
 const chapterNumber = document.getElementById('chapterNumber');
@@ -72,33 +80,46 @@ let seriesProfile = loadSeriesProfile();
 function defaultState() { return BOOK.createInitialState(seriesProfile); }
 
 function migrateLegacySaveIfNeeded() {
-  try {
-    if (!localStorage.getItem(STORAGE_KEY)) {
-      for (const key of (BOOK.legacyStorageKeys || [])) {
-        const legacy = localStorage.getItem(key);
-        if (legacy) {
-          localStorage.setItem(STORAGE_KEY, legacy);
-          break;
-        }
+  // Migration non destructive des sauvegardes de la V40 : la sauvegarde
+  // d'origine n'est PAS supprimée. Une sauvegarde stable existante prime.
+  const migrateOne = (target, sources) => {
+    try {
+      if (localStorage.getItem(target)) return;
+      for (const key of sources) {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        let candidate;
+        try { candidate = JSON.parse(raw); } catch { continue; }
+        if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue;
+        if (typeof candidate.node !== 'string' || !STORY[candidate.node]) continue;
+        if (!candidate.inventory || typeof candidate.inventory !== 'object') continue;
+        if (!candidate.flags || typeof candidate.flags !== 'object') continue;
+        localStorage.setItem(target, raw);
+        return;
       }
-    }
-    if (!localStorage.getItem(CHECKPOINT_KEY)) {
-      for (const key of (BOOK.legacyCheckpointKeys || [])) {
-        const legacy = localStorage.getItem(key);
-        if (legacy) {
-          localStorage.setItem(CHECKPOINT_KEY, legacy);
-          break;
-        }
-      }
-    }
-  } catch (e) {}
+    } catch (e) { /* Stockage bloqué : le livre reste jouable sans sauvegarde. */ }
+  };
+  migrateOne(STORAGE_KEY, BOOK.legacyStorageKeys || []);
+  migrateOne(CHECKPOINT_KEY, BOOK.legacyCheckpointKeys || []);
 }
 migrateLegacySaveIfNeeded();
 
 function loadState() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? { ...defaultState(), ...JSON.parse(saved) } : defaultState();
+    if (!saved) return defaultState();
+    const previous = JSON.parse(saved);
+    if (!previous || typeof previous !== 'object' || Array.isArray(previous)) return defaultState();
+    // Les anciens choix, inventaire, caractéristiques et états de combats
+    // sont conservés. Seuls d'éventuels champs nouvellement ajoutés prennent
+    // leur valeur par défaut.
+    const restored = { ...defaultState(), ...previous };
+    if (!STORY[restored.node]) restored.node = 'start';
+    if (!restored.inventory || typeof restored.inventory !== 'object') restored.inventory = {};
+    if (!restored.flags || typeof restored.flags !== 'object') restored.flags = {};
+    if (!restored.visited || typeof restored.visited !== 'object') restored.visited = {};
+    if (!Array.isArray(restored.history)) restored.history = [];
+    return restored;
   } catch { return defaultState(); }
 }
 let state = loadState();
@@ -156,7 +177,9 @@ function maybeAutoCheckpoint(id) {
 
 function enterNode(id) {
   const node = STORY[id];
-  if (!node) return;
+  // L'histoire peut déjà contenir les futures pages en interne, mais aucune
+  // page encore non publiée ne doit être accessible dans la démo joueurs.
+  if (!node || (BOOK.playerRelease && /^c\d+$/.test(id) && !PAGE_BY_NODE[id])) return;
   state.node = id;
   if (!state.visited[id]) {
     state.visited[id] = true;
@@ -215,6 +238,7 @@ function render() {
     }
   }
   chapterTitle.textContent = node.title || '';
+  chapterTitle.classList.toggle('hidden', !node.title);
   storyText.innerHTML = typeof node.text === 'function' ? node.text(state) : node.text;
 
   document.querySelectorAll('.hero-gender-input').forEach(input => {
@@ -236,7 +260,16 @@ function render() {
     labels.forEach(label => { const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = label; statusTags.appendChild(tag); });
   }
 
-  const availableChoices = typeof node.choices === 'function' ? node.choices(state) : (node.choices || []);
+  const rawChoices = typeof node.choices === 'function' ? node.choices(state) : (node.choices || []);
+  const availableChoices = BOOK.playerRelease
+    ? rawChoices.filter(choice => !choice.to || !/^c\d+$/.test(choice.to) || !!PAGE_BY_NODE[choice.to])
+    : rawChoices;
+  // Une fin de démo n'est pas une fin de partie. On sauvegarde l'emplacement
+  // exact et on conserve les objets/choix ; une prochaine publication ouvre
+  // simplement les nouvelles destinations sans rejouer les pages déjà lues.
+  if (BOOK.playerRelease && rawChoices.length > 0 && availableChoices.length === 0 && state.hp > 0) {
+    storyText.insertAdjacentHTML('beforeend', '<p class="ending">FIN DE CETTE VERSION D’ESSAI</p><p>Ta progression est enregistrée. Reviens après la prochaine mise à jour : tu pourras poursuivre cette aventure avec ton personnage, ton inventaire et tes choix.</p>');
+  }
   choices.innerHTML = '';
   availableChoices.forEach((choice, i) => {
     const btn = document.createElement('button');
