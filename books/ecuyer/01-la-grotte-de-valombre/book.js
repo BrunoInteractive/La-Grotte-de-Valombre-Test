@@ -1469,7 +1469,7 @@ const STORY = {
     `,
     choices: [
       { label: 'Retourner en arrière en courant', to: 'c23' },
-      { label: 'Attaquer la source du grondement', to: 'c24' }
+      { label: 'Rester sur place et dégainer son épée', to: 'c24' }
     ]
   },
 
@@ -1507,7 +1507,7 @@ const STORY = {
     noImage: true,
     image: 'Le grondement dans l’ombre',
     text: state => `
-      <p>Tu te tournes vers le grondement, l’épée prête.</p>
+      <p>Tu restes sur place et dégaines ton épée. Le grondement vient toujours de l’obscurité, sur le côté.</p>
       <p>Quelque chose bouge dans l’obscurité.</p>
       <p>Ton esprit lui donne d’abord une forme simple : une masse lourde, ramassée, assez proche pour faire vibrer la pierre sous tes pieds.</p>
       <p>Puis cette première certitude se défait.</p>
