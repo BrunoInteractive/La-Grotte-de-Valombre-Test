@@ -481,8 +481,8 @@ const STORY = {
 
       <div class="parchment-verse">
         <em>ne pas ouvrir l’œil</em><br><br>
-        <s><strong>soufre</strong></s><br>
-        <small>Le mot est barré plusieurs fois. Une petite tête de mort est dessinée à côté.</small><br><br>
+        <strong>soufre !!!</strong><br>
+        <small>Le mot « soufre » est entouré plusieurs fois, avec plusieurs traits nerveux et des points d’exclamation.</small><br><br>
         <em>lame noire</em><br><br>
         <em>derrière la paroi</em><br>
         <em>terre noire</em><br>
@@ -4793,7 +4793,7 @@ const STORY = {
         api.showModal('Notes d’Aldren', `
           <img class="inventory-parchment-image" src="${api.book.assetBase}/objets/La-Grotte-de-Valombre-Parchemin.png" alt="Notes d’Aldren" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
           <div class="inventory-image-fallback">Ton image apparaîtra ici dès que tu ajouteras :<br><strong>books/ecuyer/01-la-grotte-de-valombre/images/objets/La-Grotte-de-Valombre-Parchemin.png</strong></div>
-          <div class="parchment-verse"><em>ne pas ouvrir l’œil</em><br><br><s><strong>soufre</strong></s><br><small>barré plusieurs fois, avec une tête de mort dessinée à côté</small><br><br><em>lame noire</em><br><br><em>derrière la paroi</em><br><em>terre noire</em><br><em>ne pas écouter</em><br><em>surtout ne pas—</em></div>
+          <div class="parchment-verse"><em>ne pas ouvrir l’œil</em><br><br><strong>soufre !!!</strong><br><small>Le mot « soufre » est entouré plusieurs fois, avec plusieurs traits nerveux et des points d’exclamation.</small><br><br><em>lame noire</em><br><br><em>derrière la paroi</em><br><em>terre noire</em><br><em>ne pas écouter</em><br><em>surtout ne pas—</em></div>
           <button class="inventory-action-btn" data-action="back-inventory">Retour à l’inventaire</button>`);
         return true;
       }
