@@ -4,11 +4,11 @@
   "orderInSeries": 1,
   "title": "La Grotte de Valombre",
   "access": "free",
-  "contentVersion": 23,
+  "contentVersion": 24,
   "entry": "book.js",
   "assetBase": "images",
   "episode": 1,
   "slug": "la-grotte-de-valombre",
   "saveVersion": 18,
-  "buildLabel": "V45 — Test joueurs · page 40 · sauvegarde durable · armes 2/5"
+  "buildLabel": "V48 — Test joueurs · page 40 · exploration libre du camp · sauvegarde durable"
 }

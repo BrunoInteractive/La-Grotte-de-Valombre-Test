@@ -349,6 +349,21 @@ function setHeroIdentity(state, gender) {
   state.heroName = state.heroGender === 'male' ? 'Aubin' : 'Aélis';
 }
 
+// Une visite de chaque branche suffit : une fois revenue au croisement,
+// elle ne doit plus être proposée, y compris sur une ancienne sauvegarde.
+function campGalleryAvailable(state) {
+  return !state.flags.galleryVisited && !state.flags.galleryAttempted &&
+    !state.visited.c31 && !state.visited.c32;
+}
+function campTunnelAvailable(state) {
+  return !state.flags.tunnelVisited && !state.visited.c34 &&
+    !state.visited.c35 && !state.visited.c36 && !state.visited.c38;
+}
+function rememberCampJournalIfVisited(state) {
+  // Laisser lire le journal si le joueur s'était d'abord dirigé vers une galerie.
+  if (state.visited.c30) state.flags.campJournalRead = true;
+}
+
 const STORY = {
   start: {
     sheet: true,
@@ -1684,19 +1699,17 @@ const STORY = {
       <p>La cavité se prolonge dans plusieurs directions. À quelques mètres du feu, tu distingues les restes d’un <strong>ancien campement</strong>. Sur la droite, une galerie est presque entièrement <strong>barrée par un énorme bloc de pierre</strong>. Plus loin, un <strong>tunnel étroit</strong> s’enfonce dans l’obscurité.</p>
     `,
     choices: state => {
-      const list = [
-        { label: 'Examiner le vieux campement', to: 'c30' }
-      ];
-
-      if (!state.flags.galleryAttempted) {
-        list.push({ label: 'Explorer la galerie bloquée par une pierre', to: 'c31' });
+      const list = [];
+      if (!state.flags.campJournalRead && !state.visited.c30) {
+        list.push({ label: 'Examiner le vieux campement', to: 'c30' });
       }
-
-      list.push(
-        { label: 'Aller dans le tunnel voisin', to: 'c34' },
-        { label: 'Quitter le camp et poursuivre la descente', to: 'c37' }
-      );
-
+      if (campGalleryAvailable(state)) {
+        list.push({ label: 'Explorer la galerie condamnée', to: 'c31' });
+      }
+      if (campTunnelAvailable(state)) {
+        list.push({ label: 'Explorer le tunnel voisin', to: 'c34' });
+      }
+      list.push({ label: 'Quitter le camp et poursuivre vers les profondeurs', to: 'c37' });
       return list;
     }
   },
@@ -1729,12 +1742,21 @@ const STORY = {
     number: 'PAGE 30',
     title: '',
     image: 'Le journal d’Anselme',
-    text: state => `
+    text: state => state.flags.campJournalRead ? `
+      <p>Tu retrouves le croisement des galeries. Le feu du camp brûle toujours un peu plus loin, mais tu n'as pas besoin de retourner auprès d’Anselme.</p>
+      <p>La galerie condamnée et le tunnel voisin s’ouvrent de part et d’autre.</p>
+      ${campGalleryAvailable(state) || campTunnelAvailable(state)
+        ? '<p>Il reste un passage que tu peux explorer avant de poursuivre la descente.</p>'
+        : '<p>Tu as terminé ton exploration des alentours. La descente se poursuit devant toi.</p>'}
+      ${hasItem(state, 'casque_cabosse') ? '<p>Le casque cabossé est maintenant dans ton équipement.</p>' : '<p>Le casque cabossé repose encore près de la couverture.</p>'}
+    ` : `
       <p>Tu laisses Anselme près du feu et t’approches de l’ancien campement.</p>
 
       <p>Il semble abandonné depuis bien plus longtemps. Une couverture moisie s’est presque soudée au sol. Une tasse de métal repose près d’un cercle de cendres froides.</p>
 
-      <p>À côté de la couverture, un <strong>casque de fer cabossé</strong> a été abandonné au sol. Il est lourd et terni, mais aucune fente ne traverse le métal.</p>
+      ${hasItem(state, 'casque_cabosse')
+        ? '<p>Le casque cabossé que tu as ramassé reposait près de cette couverture.</p>'
+        : '<p>À côté de la couverture, un <strong>casque de fer cabossé</strong> a été abandonné au sol. Il est lourd et terni, mais aucune fente ne traverse le métal.</p>'}
 
       <p>Sous la tasse, tu découvres un petit carnet protégé par une couverture de cuir.</p>
 
@@ -1773,9 +1795,13 @@ const STORY = {
           effect: s => addProtectiveItem(s, 'casque_cabosse', 'Casque cabossé', 'Un casque de fer ancien mais encore solide. Il peut absorber 2 points de dégâts avant ta Vie.', 2)
         });
       }
-      list.push({ label: 'Continuer vers les profondeurs', to: 'c37' });
-      if (!state.flags.galleryAttempted) list.push({ label: 'Explorer la galerie bloquée', to: 'c31' });
-      list.push({ label: 'Aller dans le tunnel voisin', to: 'c34' });
+      if (campGalleryAvailable(state)) {
+        list.push({ label: 'Explorer la galerie condamnée', to: 'c31', effect: s => { s.flags.campJournalRead = true; } });
+      }
+      if (campTunnelAvailable(state)) {
+        list.push({ label: 'Explorer le tunnel voisin', to: 'c34', effect: s => { s.flags.campJournalRead = true; } });
+      }
+      list.push({ label: 'Poursuivre vers les profondeurs', to: 'c37', effect: s => { s.flags.campJournalRead = true; } });
       return list;
     }
   },
@@ -1785,6 +1811,7 @@ const STORY = {
     title: 'La galerie condamnée',
     noImage: true,
     image: 'La galerie condamnée',
+    onEnter: s => { s.flags.galleryVisited = true; },
     text: state => `
       <p>Tu t’engages dans la galerie de droite.</p>
 
@@ -1796,7 +1823,9 @@ const STORY = {
 
       <p><strong>Ta Force : ${currentForce(state)}</strong></p>
     `,
-    choices: [
+    choices: state => state.flags.galleryAttempted ? [
+      { label: 'Revenir au croisement des galeries', to: 'c30', effect: rememberCampJournalIfVisited }
+    ] : [
       {
         label: 'Tenter de déplacer le bloc — lancer les trois dés',
         to: 'c32',
@@ -1807,7 +1836,7 @@ const STORY = {
             : 'force_fail';
         }
       },
-      { label: 'Ne pas prendre le risque et poursuivre vers les profondeurs', to: 'c37' }
+      { label: 'Renoncer et revenir au croisement des galeries', to: 'c30', effect: rememberCampJournalIfVisited }
     ]
   },
 
@@ -1865,7 +1894,7 @@ const STORY = {
       `;
     },
     choices: [
-      { label: 'Poursuivre vers les profondeurs', to: 'c37' }
+      { label: 'Revenir au croisement des galeries', to: 'c30', effect: rememberCampJournalIfVisited }
     ]
   },
 
@@ -1941,6 +1970,7 @@ const STORY = {
     title: 'Le tunnel voisin',
     noImage: true,
     image: 'Le tunnel voisin',
+    onEnter: s => { s.flags.tunnelVisited = true; },
     text: `
       <p>Tu laisses la lumière du feu derrière toi et t’engages dans le tunnel voisin.</p>
 
@@ -1973,7 +2003,7 @@ const STORY = {
     choices: [
       { label: 'Lui parler sans t’approcher', to: 'c35' },
       { label: 'T’approcher pour essayer de l’aider', to: 'c36' },
-      { label: 'Reculer lentement et repartir', to: 'c37' }
+      { label: 'Reculer lentement et revenir au croisement', to: 'c30', effect: rememberCampJournalIfVisited }
     ]
   },
 
@@ -2013,10 +2043,10 @@ const STORY = {
 
       <p>Tu recules sans la quitter des yeux, puis reprends le tunnel en sens inverse.</p>
 
-      <p>Lorsque tu retrouves la galerie principale, les sanglots continuent encore derrière toi.</p>
+      <p>Lorsque tu retrouves le croisement, les sanglots continuent encore derrière toi. Tu n'as aucune envie de retourner dans ce tunnel.</p>
     `,
     choices: [
-      { label: 'Poursuivre vers les profondeurs', to: 'c37' }
+      { label: 'Revenir au croisement des galeries', to: 'c30', effect: rememberCampJournalIfVisited }
     ]
   },
 
@@ -2169,7 +2199,7 @@ const STORY = {
     },
     choices: state => {
       const combat = combatState(state, 'rochebrumeMissing', ENEMIES.rochebrumeMissing);
-      if (combat.hp <= 0) return [{ label: 'Reprendre ton souffle et poursuivre', to: 'c37' }];
+      if (combat.hp <= 0) return [{ label: 'Reprendre ton souffle et revenir au croisement', to: 'c30', effect: rememberCampJournalIfVisited }];
       if (state.hp <= 0) return fatalChoices();
       return combatActionChoices(state, 'rochebrumeMissing', ENEMIES.rochebrumeMissing, 'c38', 'Continuer le combat');
     }
@@ -4858,7 +4888,7 @@ const STORY = {
     title: 'La Grotte de Valombre',
     description: 'Première aventure de la série de l’Écuyer.',
     access: 'free',
-    contentVersion: 23,
+    contentVersion: 24,
     saveVersion: 18, // Ancien identifiant V40 : migration uniquement. Ne plus l'incrémenter pour une publication.
     stablePlayerSaves: true,
     playerRelease: true,
