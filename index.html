@@ -304,8 +304,11 @@ button { font: inherit; }
 .choices {
   position:relative;
   display:grid;
-  grid-template-columns:repeat(2, minmax(0,1fr));
-  gap: 20px;
+  grid-template-columns:minmax(0, 1fr);
+  grid-auto-rows:1fr; /* Tous les choix d’une page prennent la hauteur du plus grand. */
+  align-items:stretch;
+  width:100%;
+  gap: 14px;
   margin: 22px auto 6px;
   padding-top: 4px;
   max-width: 860px;
@@ -378,11 +381,11 @@ button { font: inherit; }
 }
 .choice-dest::before,
 .choice-dest::after { content:''; margin:0; }
-.choice-btn:only-child,
-.choice-btn:last-child:nth-child(odd) {
-  grid-column:1 / -1;
-  max-width:390px;
-  justify-self:center;
+/* Chaque choix occupe toute la largeur, quel que soit leur nombre. */
+.choice-btn {
+  grid-column:1;
+  justify-self:stretch;
+  max-width:none;
 }
 
 
@@ -545,9 +548,10 @@ button { font: inherit; }
 }
 
 
-
-  .choices { grid-template-columns:1fr; gap:12px; margin-top:27px; }
-  .choice-btn { min-height:116px; }
+/* Sur petit écran, conserver une colonne et des zones tactiles confortables. */
+@media (max-width:620px) {
+  .choices { grid-template-columns:minmax(0,1fr); gap:12px; margin-top:27px; }
+  .choice-btn { min-height:120px; }
   .choice-copy { font-size:17px; }
 }
 

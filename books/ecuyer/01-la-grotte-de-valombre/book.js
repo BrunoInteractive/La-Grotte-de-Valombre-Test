@@ -456,21 +456,23 @@ const STORY = {
       }
     },
     text: state => `
-      <p>Tu ouvres la sacoche. À l’intérieur, tu trouves <strong>trois pièces d’argent</strong>, une petite <strong>fiole rouge sombre</strong> et une feuille pliée plusieurs fois.</p>
-      <p>Le papier n’a rien d’un message préparé. Ce sont plutôt des notes jetées à la hâte, comme si Aldren avait essayé de retenir plusieurs idées à la fois avant de manquer de temps.</p>
+      <p>Tu ouvres la sacoche. À l’intérieur, tu trouves <strong>trois pièces d’argent</strong>, une petite <strong>fiole rouge sombre</strong> et un morceau de parchemin plié plusieurs fois.</p>
+      <p>Le papier est froissé, taché, presque déchiré par endroits. Certaines lignes ont été griffonnées si fort que la plume a failli percer la feuille.</p>
+      <p>Tu le déplies. Ce n’est pas vraiment un message. Plutôt des notes jetées à la hâte, comme pour fixer des idées avant de les oublier.</p>
 
       <div class="parchment-verse">
-        <strong>N’OUVRE JAMAIS L’ŒIL QUI DORT</strong><br><br>
-        <s><strong>SOUFFRE</strong></s><br>
-        <span>Le mot a été barré trois fois. À côté, une petite tête de mort a été griffonnée d’un trait pressé.</span><br><br>
-        <strong>IL FAUT TROUVER LA LAME NOIRE !!!</strong><br><br>
-        <em>attention à ce qui se cache derrière les parois</em><br><br>
-        <strong>TERRE NOIRE</strong> · terre noire · <strong>terre noire</strong> · <strong>TERRE NOIRE</strong>
+        <em>ne pas ouvrir l’œil</em><br><br>
+        <s><strong>soufre</strong></s><br>
+        <small>Le mot est barré plusieurs fois. Une petite tête de mort est dessinée à côté.</small><br><br>
+        <em>lame noire</em><br><br>
+        <em>derrière la paroi</em><br>
+        <em>terre noire</em><br>
+        <em>ne pas écouter</em><br>
+        <em>surtout ne pas—</em>
       </div>
 
-      <p>D’autres fragments courent dans les marges, inachevés, recopiés, parfois presque illisibles. Le mot <strong>terre noire</strong> revient sans cesse.</p>
-      <p>Tu replies la feuille. Tout cela ressemble moins à un indice laissé pour quelqu’un qu’aux pensées d’un homme qui essayait de comprendre — ou de ne pas oublier.</p>
-      <p>Tu ranges ses notes dans ton inventaire. Tu pourras les relire quand tu le souhaites.</p>
+      <p>La dernière ligne s’interrompt dans une traînée d’encre. Tu relis la feuille sans mieux comprendre.</p>
+      <p>Tu replies soigneusement les notes et les ranges dans ton inventaire. Tu pourras les relire quand tu le souhaites.</p>
       ${hasItem(state,'fiole_rouge') || state.flags.fioleLaissee
         ? '<p>Tu as déjà décidé quoi faire de la mystérieuse fiole rouge.</p>'
         : '<p>La fiole rouge reste entre tes mains. Tu ignores encore ce qu’elle contient.</p>'}
@@ -600,13 +602,13 @@ const STORY = {
         <div>
           <strong>Garder l’épée lourde</strong><br><br>
           <strong>Épée de Sir Aldren</strong><br>
-          Puissance de l’arme : <strong>4</strong><br>
+          Puissance de l’arme : <strong>5</strong><br>
           Dextérité : <strong>9</strong>
         </div>
         <div>
           <strong>Accepter l’échange</strong><br><br>
           <strong>Épée de la forgeronne</strong><br>
-          Puissance de l’arme : <strong>1</strong><br>
+          Puissance de l’arme : <strong>2</strong><br>
           Dextérité : <strong>12</strong>
         </div>
       </div>
@@ -2862,7 +2864,7 @@ const STORY = {
 
       <p>Tu repenses aux mots griffonnés dans la sacoche d’Aldren.</p>
 
-      <blockquote>« IL FAUT TROUVER LA LAME NOIRE !!! »</blockquote>
+      <p>Parmi les notes d’Aldren, ces deux mots te reviennent : <em>lame noire</em>.</p>
 
       <p>Tu avais imaginé une arme capable de tuer.</p>
 
@@ -4510,8 +4512,8 @@ const STORY = {
   }
 
   function combatPower(state) {
-    if (state.weapon === 'heavy') return 4;
-    if (state.weapon === 'light') return 1;
+    if (state.weapon === 'heavy') return 5;
+    if (state.weapon === 'light') return 2;
     if (state.weapon === 'black_blade') return 6;
     return 0;
   }
@@ -4677,8 +4679,8 @@ const STORY = {
 
     const weaponOptions = [
       ['none', 'Aucune'],
-      ['heavy', 'Grosse épée · DEX −4 · Puissance 4'],
-      ['light', 'Petite épée · DEX −1 · Puissance 1']
+      ['heavy', 'Grosse épée · DEX −4 · Puissance 5'],
+      ['light', 'Petite épée · DEX −1 · Puissance 2']
     ].map(([value, label]) => `
       <label class="test-weapon-option">
         <input type="radio" name="testWeapon" data-action="test-equip-weapon:${value}" ${state.weapon === value ? 'checked' : ''}>
@@ -4768,7 +4770,7 @@ const STORY = {
         api.showModal('Notes d’Aldren', `
           <img class="inventory-parchment-image" src="${api.book.assetBase}/objets/La-Grotte-de-Valombre-Parchemin.png" alt="Notes d’Aldren" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
           <div class="inventory-image-fallback">Ton image apparaîtra ici dès que tu ajouteras :<br><strong>books/ecuyer/01-la-grotte-de-valombre/images/objets/La-Grotte-de-Valombre-Parchemin.png</strong></div>
-          <div class="parchment-verse"><strong>N’OUVRE JAMAIS L’ŒIL QUI DORT</strong><br><br><s><strong>SOUFFRE</strong></s><br><small>barré trois fois, avec une tête de mort griffonnée à côté</small><br><br><strong>IL FAUT TROUVER LA LAME NOIRE !!!</strong><br><br><em>attention à ce qui se cache derrière les parois</em><br><br><strong>TERRE NOIRE</strong> · terre noire · <strong>terre noire</strong> · <strong>TERRE NOIRE</strong></div>
+          <div class="parchment-verse"><em>ne pas ouvrir l’œil</em><br><br><s><strong>soufre</strong></s><br><small>barré plusieurs fois, avec une tête de mort dessinée à côté</small><br><br><em>lame noire</em><br><br><em>derrière la paroi</em><br><em>terre noire</em><br><em>ne pas écouter</em><br><em>surtout ne pas—</em></div>
           <button class="inventory-action-btn" data-action="back-inventory">Retour à l’inventaire</button>`);
         return true;
       }
@@ -4863,7 +4865,7 @@ const STORY = {
     title: 'La Grotte de Valombre',
     description: 'Première aventure de la série de l’Écuyer.',
     access: 'free',
-    contentVersion: 22,
+    contentVersion: 23,
     saveVersion: 18, // Ancien identifiant V40 : migration uniquement. Ne plus l'incrémenter pour une publication.
     stablePlayerSaves: true,
     playerRelease: true,

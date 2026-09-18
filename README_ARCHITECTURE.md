@@ -90,8 +90,8 @@ Les ZIP de développement peuvent continuer à s’appeler `..._V13.zip`, `..._V
 
 ## V17 TEST — nouvel équilibrage Force / armes
 - Héros au départ : Vie 18, Chance 12, Force 8, Dextérité 13, Puissance de l’arme 0.
-- Épée lourde de Sir Aldren : Dextérité -4 (DEX 9 au départ), Puissance 4.
-- Épée du forgeron : Dextérité -1 (DEX 12 au départ), Puissance 1.
+- Épée lourde de Sir Aldren : Dextérité -4 (DEX 9 au départ), Puissance 5.
+- Épée de la forgeronne : Dextérité -1 (DEX 12 au départ), Puissance 2.
 - Combat opposé inchangé : Dextérité + 2D6 contre Dextérité + 2D6.
 - Dégâts : bonus de Force + Puissance de l’arme ; bonus de Force = ⌊Force / 4⌋, minimum 1.
 - Masse dans l’ombre : Vie 6, Force 8, Dextérité 5, dégâts 2.
@@ -182,11 +182,16 @@ La démo joueur se poursuit désormais dans les premières galeries et s’arrê
 
 ## V32 — démo joueurs jusqu’à la page 40
 - Page 4 sans image.
-- Marchand et forgeron ne sont proposés qu'une seule fois sur la place de Valombre.
+- Marchand et forgeronne ne sont proposés qu'une seule fois sur la place de Valombre.
 - L'achat des lames d'Élias se fait désormais directement sur la page 18, sans changement de page.
 - La table des pages de la démo est correctement limitée aux pages 1 à 40.
 
 
 ## V33 — Visites uniques et checkpoint
-- Marchand, forgeron, personnages de rue et Élias ne sont plus revisitable après leur première scène, sauf futur embranchement narratif explicite.
+- Marchand, forgeronne, personnages de rue et Élias ne sont plus revisitable après leur première scène, sauf futur embranchement narratif explicite.
 - Premier checkpoint déplacé à la page 20, à l’entrée de la grotte.
+
+
+## V41 — Continuité des parties joueurs
+
+`stablePlayerSaves` active des clés indépendantes de `saveVersion` et migre V40. `playerRelease` masque toute destination cN absente de `pageByNode` et affiche une fin de démo informative seulement tant qu'aucune route n'est publiée. `PUBLISHED_PAGE_COUNT` définit la borne de publication. Conserver les IDs cN et ne pas réappliquer `onEnter` sur une page déjà visitée.
