@@ -457,19 +457,19 @@ const STORY = {
     },
     text: state => `
       <p>Tu ouvres la sacoche. À l’intérieur, tu trouves <strong>trois pièces d’argent</strong>, une petite <strong>fiole rouge sombre</strong> et une feuille pliée plusieurs fois.</p>
-      <p>Le papier est couvert de mots griffonnés à la hâte. Certaines lignes se chevauchent. D’autres sont à peine lisibles.</p>
+      <p>Le papier n’a rien d’un message préparé. Ce sont plutôt des notes jetées à la hâte, comme si Aldren avait essayé de retenir plusieurs idées à la fois avant de manquer de temps.</p>
 
       <div class="parchment-verse">
         <strong>N’OUVRE JAMAIS L’ŒIL QUI DORT</strong><br><br>
         <s><strong>SOUFFRE</strong></s><br>
-        <span>Le mot a été barré trois fois. À côté, une petite tête de mort a été dessinée d’un trait nerveux.</span><br><br>
+        <span>Le mot a été barré trois fois. À côté, une petite tête de mort a été griffonnée d’un trait pressé.</span><br><br>
         <strong>IL FAUT TROUVER LA LAME NOIRE !!!</strong><br><br>
         <em>attention à ce qui se cache derrière les parois</em><br><br>
-        <strong>TERRE NOIRE</strong> · terre noire · <strong>TERRE NOIRE</strong> · terre noire
+        <strong>TERRE NOIRE</strong> · terre noire · <strong>terre noire</strong> · <strong>TERRE NOIRE</strong>
       </div>
 
-      <p>Le mot <strong>terre noire</strong> revient encore dans les marges, parfois écrit plus gros, parfois repassé plusieurs fois.</p>
-      <p>Tu replies la feuille. Quoi qu’Aldren ait voulu noter, il ne semble pas avoir eu le temps de mettre ses idées en ordre.</p>
+      <p>D’autres fragments courent dans les marges, inachevés, recopiés, parfois presque illisibles. Le mot <strong>terre noire</strong> revient sans cesse.</p>
+      <p>Tu replies la feuille. Tout cela ressemble moins à un indice laissé pour quelqu’un qu’aux pensées d’un homme qui essayait de comprendre — ou de ne pas oublier.</p>
       <p>Tu ranges ses notes dans ton inventaire. Tu pourras les relire quand tu le souhaites.</p>
       ${hasItem(state,'fiole_rouge') || state.flags.fioleLaissee
         ? '<p>Tu as déjà décidé quoi faire de la mystérieuse fiole rouge.</p>'
@@ -515,7 +515,7 @@ const STORY = {
     choices: state => {
       const list = [];
       if (!state.flags.merchantVisited) list.push({ label: 'Voir le marchand', to: 'c4' });
-      if (!state.flags.blacksmithVisited) list.push({ label: 'Voir le forgeron', to: 'c5' });
+      if (!state.flags.blacksmithVisited) list.push({ label: 'Voir la forgeronne', to: 'c5' });
       if (!state.flags.valombreStreetVisited) list.push({ label: 'Approcher la personne dans la ruelle', to: 'c6' });
       list.push({ label: 'Partir vers la grotte', to: 'c8' });
       return list;
@@ -573,26 +573,26 @@ const STORY = {
   c5: {
     number: 'PAGE 5',
     title: 'La forge',
-    image: 'Le forgeron de Valombre',
+    image: 'La forgeronne de Valombre',
     onEnter: s => { s.flags.blacksmithVisited = true; },
     text: state => `
-      <p>Le forgeron lève immédiatement les yeux lorsque tu entres.</p>
+      <p>La forgeronne lève immédiatement les yeux lorsque tu entres.</p>
 
       <blockquote>« Toi ? Où est Aldren ? »</blockquote>
 
-      <p>Lorsqu’il apprend ce qui s’est passé, son visage se ferme.</p>
+      <p>Lorsqu’elle apprend ce qui s’est passé, son visage se ferme.</p>
 
-      <p>Il connaissait ton maître depuis des années.</p>
+      <p>Elle connaissait ton maître depuis des années.</p>
 
       <blockquote>« J’irais avec toi si je le pouvais. Mais ma jambe ne me mènerait même pas jusqu’au pied de la montagne. »</blockquote>
 
       <p>Son regard tombe alors sur l’ancienne épée de Sir Aldren.</p>
 
-      <p>Il sourit légèrement.</p>
+      <p>Elle sourit légèrement.</p>
 
       <blockquote>« Cette chose ? Aldren maniait ça comme une brindille. Toi, elle va te faire tomber avant ton adversaire. »</blockquote>
 
-      <p>Il disparaît dans l’arrière-boutique et revient avec une lame plus courte, parfaitement équilibrée.</p>
+      <p>Elle disparaît dans l’arrière-boutique et revient avec une lame plus courte, parfaitement équilibrée.</p>
 
       <blockquote>« Je te propose un échange. Elle frappe moins fort… mais entre de bonnes mains, elle frappe beaucoup plus vite. »</blockquote>
 
@@ -605,7 +605,7 @@ const STORY = {
         </div>
         <div>
           <strong>Accepter l’échange</strong><br><br>
-          <strong>Épée du forgeron</strong><br>
+          <strong>Épée de la forgeronne</strong><br>
           Puissance de l’arme : <strong>1</strong><br>
           Dextérité : <strong>12</strong>
         </div>
@@ -614,7 +614,7 @@ const STORY = {
     choices: state => {
       if (state.weapon === 'light') {
         return [
-          { label: 'Remercier le forgeron et retourner sur la place', to: 'c3' }
+          { label: 'Remercier la forgeronne et retourner sur la place', to: 'c3' }
         ];
       }
       return [
@@ -4518,7 +4518,7 @@ const STORY = {
 
   function weaponLabel(state) {
     if (state.weapon === 'heavy') return 'Épée lourde de Sir Aldren';
-    if (state.weapon === 'light') return 'Épée du forgeron';
+    if (state.weapon === 'light') return 'Épée de la forgeronne';
     if (state.weapon === 'black_blade') return 'Lame noire';
     return 'Aucune';
   }
@@ -4768,7 +4768,7 @@ const STORY = {
         api.showModal('Notes d’Aldren', `
           <img class="inventory-parchment-image" src="${api.book.assetBase}/objets/La-Grotte-de-Valombre-Parchemin.png" alt="Notes d’Aldren" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
           <div class="inventory-image-fallback">Ton image apparaîtra ici dès que tu ajouteras :<br><strong>books/ecuyer/01-la-grotte-de-valombre/images/objets/La-Grotte-de-Valombre-Parchemin.png</strong></div>
-          <div class="parchment-verse"><strong>N’OUVRE JAMAIS L’ŒIL QUI DORT</strong><br><br><s><strong>SOUFFRE</strong></s><br><small>barré trois fois, avec une tête de mort dessinée à côté</small><br><br><strong>IL FAUT TROUVER LA LAME NOIRE !!!</strong><br><br><em>attention à ce qui se cache derrière les parois</em><br><br><strong>TERRE NOIRE</strong> · terre noire · <strong>TERRE NOIRE</strong> · terre noire</div>
+          <div class="parchment-verse"><strong>N’OUVRE JAMAIS L’ŒIL QUI DORT</strong><br><br><s><strong>SOUFFRE</strong></s><br><small>barré trois fois, avec une tête de mort griffonnée à côté</small><br><br><strong>IL FAUT TROUVER LA LAME NOIRE !!!</strong><br><br><em>attention à ce qui se cache derrière les parois</em><br><br><strong>TERRE NOIRE</strong> · terre noire · <strong>terre noire</strong> · <strong>TERRE NOIRE</strong></div>
           <button class="inventory-action-btn" data-action="back-inventory">Retour à l’inventaire</button>`);
         return true;
       }
