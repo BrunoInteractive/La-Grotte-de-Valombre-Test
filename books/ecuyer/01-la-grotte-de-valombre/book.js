@@ -404,6 +404,10 @@ const STORY = {
         </div>
 
         <div class="hero-weapon">Au départ, tu ne portes encore aucune arme.</div>
+        <div class="hero-characteristics" role="note">
+          <div class="hero-info-title">Avant de commencer</div>
+          <p>En bas de l’écran, tu peux consulter à tout moment ta fiche perso et ton inventaire. Tu y retrouveras tes caractéristiques, ton équipement et les objets découverts pendant l’aventure.</p>
+        </div>
       </div>
       <p>Sir Aldren t’a ordonné de rester au village. Pourtant, il aurait déjà dû être revenu, et son cheval vient de rentrer seul.</p>
     `,
@@ -598,20 +602,10 @@ const STORY = {
 
       <blockquote>« Je te propose un échange. Elle frappe moins fort… mais entre de bonnes mains, elle frappe beaucoup plus vite. »</blockquote>
 
-      <div class="weapon-compare">
-        <div>
-          <strong>Garder l’épée lourde</strong><br><br>
-          <strong>Épée de Sir Aldren</strong><br>
-          Puissance de l’arme : <strong>5</strong><br>
-          Dextérité : <strong>9</strong>
-        </div>
-        <div>
-          <strong>Accepter l’échange</strong><br><br>
-          <strong>Épée de la forgeronne</strong><br>
-          Puissance de l’arme : <strong>2</strong><br>
-          Dextérité : <strong>12</strong>
-        </div>
-      </div>
+      <p><strong>Pour comparer les deux armes :</strong></p>
+      <p><strong>Épée lourde de Sir Aldren</strong> — Puissance : <strong>5</strong> · Dextérité : <strong>9</strong>.</p>
+      <p><strong>Épée de la forgeronne</strong> — Puissance : <strong>2</strong> · Dextérité : <strong>12</strong>.</p>
+      <p>Choisis ci-dessous quelle arme tu souhaites emporter.</p>
     `,
     choices: state => {
       if (state.weapon === 'light') {
