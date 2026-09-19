@@ -1,17 +1,17 @@
-/* Carte narrative : seuls les lieux et indices réellement présents dans le récit. */
+/* Carte narrative V62 : compacte ; embranchements et découvertes conservés. */
 (function(){
   const book = BookRegistry.get("ecuyer-01-player-test");
   if (book) book.adventureMap = {
   "mode": "player",
-  "version": 1,
-  "width": 1060,
-  "height": 1650,
+  "version": 2,
+  "width": 680,
+  "height": 989,
   "nodes": [
     {
       "id": "ecuries",
       "label": "Écuries",
-      "x": 500,
-      "y": 70,
+      "x": 309,
+      "y": 42,
       "pages": [
         "c1"
       ],
@@ -20,8 +20,8 @@
     {
       "id": "sacoche",
       "label": "Sacoche d’Aldren",
-      "x": 260,
-      "y": 155,
+      "x": 172,
+      "y": 90,
       "pages": [
         "c2"
       ],
@@ -35,8 +35,8 @@
     {
       "id": "place",
       "label": "Place de Valombre",
-      "x": 680,
-      "y": 160,
+      "x": 411,
+      "y": 92,
       "pages": [
         "c3"
       ],
@@ -45,8 +45,8 @@
     {
       "id": "marchand",
       "label": "Marchand",
-      "x": 865,
-      "y": 255,
+      "x": 517,
+      "y": 146,
       "pages": [
         "c4"
       ],
@@ -55,8 +55,8 @@
     {
       "id": "forge",
       "label": "Forge",
-      "x": 615,
-      "y": 275,
+      "x": 374,
+      "y": 157,
       "pages": [
         "c5"
       ],
@@ -65,8 +65,8 @@
     {
       "id": "ruelle",
       "label": "Ruelle",
-      "x": 950,
-      "y": 365,
+      "x": 565,
+      "y": 207,
       "pages": [
         "c6",
         "c7"
@@ -81,8 +81,8 @@
     {
       "id": "chemin",
       "label": "Chemin de la montagne",
-      "x": 465,
-      "y": 420,
+      "x": 289,
+      "y": 238,
       "pages": [
         "c8"
       ],
@@ -91,8 +91,8 @@
     {
       "id": "gaspard",
       "label": "Gaspard Vellin",
-      "x": 255,
-      "y": 535,
+      "x": 169,
+      "y": 302,
       "pages": [
         "c9",
         "c10",
@@ -114,8 +114,8 @@
     {
       "id": "foret",
       "label": "Forêt",
-      "x": 675,
-      "y": 525,
+      "x": 454,
+      "y": 297,
       "pages": [
         "c14"
       ],
@@ -124,8 +124,8 @@
     {
       "id": "rochebrume",
       "label": "Rochebrume",
-      "x": 755,
-      "y": 635,
+      "x": 454,
+      "y": 358,
       "pages": [
         "c15"
       ],
@@ -134,8 +134,8 @@
     {
       "id": "taverne",
       "label": "Taverne",
-      "x": 580,
-      "y": 730,
+      "x": 354,
+      "y": 412,
       "pages": [
         "c16",
         "c17",
@@ -151,8 +151,8 @@
     {
       "id": "etranger",
       "label": "Étranger",
-      "x": 945,
-      "y": 760,
+      "x": 562,
+      "y": 428,
       "pages": [
         "c19"
       ],
@@ -166,8 +166,8 @@
     {
       "id": "grotte",
       "label": "Entrée de la grotte",
-      "x": 460,
-      "y": 895,
+      "x": 286,
+      "y": 504,
       "pages": [
         "c20"
       ],
@@ -176,8 +176,8 @@
     {
       "id": "acide",
       "label": "Passage acide",
-      "x": 205,
-      "y": 1010,
+      "x": 141,
+      "y": 568,
       "pages": [
         "c21"
       ],
@@ -186,8 +186,8 @@
     {
       "id": "ombres",
       "label": "Salle des ombres",
-      "x": 675,
-      "y": 1010,
+      "x": 408,
+      "y": 568,
       "pages": [
         "c22",
         "c24",
@@ -202,8 +202,8 @@
     {
       "id": "fuite",
       "label": "Fuite",
-      "x": 895,
-      "y": 1110,
+      "x": 534,
+      "y": 624,
       "pages": [
         "c23"
       ],
@@ -212,8 +212,8 @@
     {
       "id": "camp",
       "label": "Camp sous la roche",
-      "x": 600,
-      "y": 1180,
+      "x": 366,
+      "y": 664,
       "pages": [
         "c28",
         "c30"
@@ -232,8 +232,8 @@
     {
       "id": "galerie",
       "label": "Galerie condamnée",
-      "x": 320,
-      "y": 1310,
+      "x": 206,
+      "y": 736,
       "pages": [
         "c31",
         "c32"
@@ -243,8 +243,8 @@
     {
       "id": "tunnel",
       "label": "Tunnel voisin",
-      "x": 885,
-      "y": 1310,
+      "x": 528,
+      "y": 736,
       "pages": [
         "c34",
         "c35",
@@ -261,8 +261,8 @@
     {
       "id": "fissures",
       "label": "Passage des fissures",
-      "x": 590,
-      "y": 1435,
+      "x": 360,
+      "y": 806,
       "pages": [
         "c37",
         "c39"
@@ -272,8 +272,8 @@
     {
       "id": "monde",
       "label": "Monde sous la montagne",
-      "x": 590,
-      "y": 1560,
+      "x": 360,
+      "y": 876,
       "pages": [
         "c40"
       ],

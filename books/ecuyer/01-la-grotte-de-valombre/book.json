@@ -4,12 +4,12 @@
   "orderInSeries": 1,
   "title": "La Grotte de Valombre",
   "access": "free",
-  "contentVersion": 27,
+  "contentVersion": 28,
   "entry": "book.js",
   "assetBase": "images",
   "episode": 1,
   "slug": "la-grotte-de-valombre",
   "saveVersion": 18,
-  "buildLabel": "V61 — Cohérence narrative · Joueurs · pages 001–040",
+  "buildLabel": "V62 — Carte compacte · Joueurs · pages 001–040",
   "pageMapVersion": 59
 }

@@ -209,7 +209,7 @@ function loadPageImage(pageNumber, title) {
   tryNext();
 }
 
-/* Carte narrative V60. Sauvegarde indépendante pour garder les découvertes entre les essais. */
+/* Carte narrative V62. Sauvegarde indépendante pour garder les découvertes entre les essais. */
 const ATLAS = BOOK.adventureMap;
 const ATLAS_KEY = `ldveh.book.${BOOK.id}.atlas.v1`;
 const atlasDetails = document.getElementById('atlasDetails');
@@ -301,7 +301,7 @@ function atlasSvgPath(start,end,stroke,dash,width) {
 function atlasStub(from,to) {
   const dx=to.x-from.x,dy=to.y-from.y;
   const length=Math.hypot(dx,dy)||1;
-  const distance=Math.min(48,length*.34);
+  const distance=Math.min(27,length*.39);
   atlasSvgPath(from,{x:from.x+dx/length*distance,y:from.y+dy/length*distance},'#907653','6 6',3);
 }
 function atlasShowDetails(area) {
@@ -348,8 +348,8 @@ function atlasDraw() {
   // sont dessinées sans révéler les pages ou les noms des lieux à venir.
   if (ATLAS.mode === 'player' && seen.has('monde')) {
     const origin=atlasNodes.get('monde');
-    for (const [dx,dy] of [[-145,95],[0,105],[145,95]]) {
-      const length=Math.hypot(dx,dy);atlasSvgPath(origin,{x:origin.x+dx/length*56,y:origin.y+dy/length*56},'#907653','6 6',3);
+    for (const [dx,dy] of [[-80,55],[0,65],[80,55]]) {
+      const length=Math.hypot(dx,dy);atlasSvgPath(origin,{x:origin.x+dx/length*31,y:origin.y+dy/length*31},'#907653','6 6',3);
     }
   }
   for (const area of ATLAS.nodes) {
