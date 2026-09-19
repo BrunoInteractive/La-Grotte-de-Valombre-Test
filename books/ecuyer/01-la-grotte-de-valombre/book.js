@@ -150,6 +150,12 @@ function damageAbsorptionHtml(result) {
   return html;
 }
 
+function contaminationLevel(state) { return Math.max(0,Math.min(13,Math.floor(Number(state.contamination)||0))); }
+function raiseContamination(state, amount=1) {
+ state.flags=state.flags||{};state.contamination=Math.min(13,contaminationLevel(state)+Math.max(0,amount));
+ state.flags.blackEarthContamination=state.contamination>0;
+ if(state.contamination>=13)state.flags.blackEarthTransformed=true;
+}
 function fightRound(state, key, enemy) {
   const combat = combatState(state, key, enemy);
   const heroDice = roll2D6();
@@ -180,6 +186,7 @@ function fightRound(state, key, enemy) {
     outcome = 'enemy';
     damage = enemyDamage;
     const resolution = applyDamage(state, damage);
+    if (resolution.hpLost>0 && !combat.contaminated) {raiseContamination(state,1);combat.contaminated=true;}
     protectionAbsorbed = resolution.absorbed;
     hpLost = resolution.hpLost;
     protectionBefore = resolution.protectionBefore;
@@ -397,7 +404,6 @@ const STORY = {
         <div class="hero-sheet-grid">
           <div class="hero-stat"><strong>Vie</strong><span>${state.hp} / ${state.maxHp}</span></div>
           <div class="hero-stat"><strong>Protection</strong><span>${currentProtection(state)}</span></div>
-          <div class="hero-stat"><strong>Chance</strong><span>${state.chance}</span></div>
           <div class="hero-stat"><strong>Force</strong><span>${currentForce(state)}</span></div>
           <div class="hero-stat"><strong>Dextérité</strong><span>${currentDexterity(state)}</span></div>
           <div class="hero-stat hero-stat-wide"><strong>Puissance de l’arme</strong><span>${state.weapon === 'none' ? 0 : combatPower(state)}</span></div>
@@ -407,7 +413,6 @@ const STORY = {
           <div class="hero-info-title">Tes caractéristiques</div>
           <p><strong>Vie :</strong> indique la santé du personnage. Lorsqu’elle atteint zéro, c’est la fin de votre aventure.</p>
           <p><strong>Protection :</strong> provient de certaines pièces d’équipement. Elle absorbe les dégâts avant la Vie et diminue lorsqu’elle encaisse un choc.</p>
-          <p><strong>Chance :</strong> permet de se sortir habilement d’un mauvais tour ou d’une situation qui semblait mal engagée.</p>
           <p><strong>Force :</strong> représente sa puissance physique. Elle contribue aux dégâts infligés et permet de forcer, retenir ou briser ce qui barre la route.</p>
           <p><strong>Dextérité :</strong> représente son aisance et ses réflexes. Elle permet de prendre l’avantage au combat, mais aussi d’éviter pièges, chutes et autres dangers. Elle peut être affectée par ce qui est porté, par exemple une arme lourde.</p>
           <p><strong>Puissance de l’arme :</strong> valeur propre à l’arme équipée. Elle s’ajoute au bonus de Force lorsque le personnage remporte un échange.</p>
@@ -973,8 +978,8 @@ const STORY = {
         addItem(
           s,
           'potion_sombre',
-          'Potion de guérison sombre',
-          'Une potion de guérison dont le liquide paraît presque noir. Quelque chose semble parfois flotter à l’intérieur.'
+          'Fiole rouge sombre',
+          'Restaure 3 Vie, mais ajoute 2 points de terre noire.'
         );
       }
     },
@@ -2027,15 +2032,15 @@ const STORY = {
 
       <p>La silhouette redresse légèrement la tête, sans jamais te montrer complètement son visage.</p>
 
-      <blockquote>« Ils ont dit que ma fille m’appelait. »</blockquote>
+      <blockquote>« Je voulais rester chez moi. »</blockquote>
 
       <p>Ses doigts se crispent contre la pierre.</p>
 
-      <blockquote>« Je l’ai suivie jusque-là. »</blockquote>
+      <blockquote>« Mais mes jambes avançaient toutes seules. Vers la montagne. »</blockquote>
 
       <p>Sa respiration devient irrégulière.</p>
 
-      <blockquote>« Je n’ai pas de fille. »</blockquote>
+      <blockquote>« Même maintenant… j’essaie encore de descendre. »</blockquote>
 
       <p>Un rire étouffé lui échappe.</p>
 
@@ -2948,7 +2953,7 @@ const STORY = {
       <p>Et, très loin à l’intérieur, quelque chose gratte doucement la pierre.</p>
     `,
     choices: [
-      { label: 'T’aventurer dans la fissure', to: 'c53', effect: s => { if (!s.flags.stairsCrackEntered) { s.flags.stairsCrackEntered = true; s.flags.stairsCrackDamage = applyDamage(s, 2); s.dexPenalty = (s.dexPenalty || 0) + 1; s.flags.blackEarthContamination = true; } } },
+      { label: 'T’aventurer dans la fissure', to: 'c53', effect: s => { if (!s.flags.stairsCrackEntered) { s.flags.stairsCrackEntered = true; s.flags.stairsCrackDamage = applyDamage(s, 2); s.dexPenalty = (s.dexPenalty || 0) + 1; raiseContamination(s,1); } } },
       { label: 'Ne pas t’y aventurer et poursuivre l’ascension', to: 'c54' }
     ]
   },
@@ -4353,7 +4358,7 @@ const STORY = {
     image: 'Le palier inférieur',
     text: state => {
       const descent = state.flags.cityWellDescent;
-      const canCleanse = hasItem(state, 'ampoule_blanche') && ((state.dexPenalty || 0) > 0 || state.flags.blackEarthContamination);
+      const canCleanse = hasItem(state, 'ampoule_blanche') && ((state.dexPenalty || 0) > 0 || contaminationLevel(state)>0);
       let intro = '';
       if (descent === 'rope') {
         intro = `
@@ -4397,7 +4402,7 @@ const STORY = {
     choices: state => {
       if (state.hp <= 0) return fatalChoices();
       const list = [];
-      if (hasItem(state, 'ampoule_blanche') && ((state.dexPenalty || 0) > 0 || state.flags.blackEarthContamination)) {
+      if (hasItem(state, 'ampoule_blanche') && ((state.dexPenalty || 0) > 0 || contaminationLevel(state)>0)) {
         list.push({
           label: 'Utiliser l’Ampoule blanche',
           to: 'c87',
@@ -4573,7 +4578,6 @@ const STORY = {
       journal: '',
       hp: base.maxHp || 18,
       maxHp: base.maxHp || 18,
-      chance: base.chance || 12,
       baseForce: base.force || 8,
       baseDexterity: base.dexterity || 13,
       forceBonus: 0,
@@ -4620,8 +4624,8 @@ const STORY = {
     },
     {
       id: 'potion_sombre',
-      name: 'Potion de guérison sombre',
-      description: 'La fiole trouvée sur Gaspard. Son liquide est presque noir.'
+      name: 'Fiole rouge sombre',
+      description: 'Restaure 3 Vie ; ajoute 2 points de terre noire.'
     },
     {
       id: 'brassard_veilleurs',
@@ -4739,7 +4743,7 @@ const STORY = {
       const healing = Number.isInteger(state.lastHealingDie)
         ? `<div class="dice-result"><p class="roll-number">Dernière potion</p><div class="dice-faces">${renderDie(state.lastHealingDie)}</div><p><strong>+${state.lastHealingDie} point${state.lastHealingDie > 1 ? 's' : ''} de Vie</strong></p><p>Vie : <strong>${state.hp} / ${state.maxHp}</strong></p></div>`
         : '';
-      return equipment + healing;
+      return equipment + (contaminationLevel(state)>0 ? `<div class="inventory-equipment-card"><strong>Terre noire : ${contaminationLevel(state)}/13</strong><p>Effets inconnus.</p></div>` : "") + healing;
     },
 
     actionHtml(id, item, state) {
@@ -4752,8 +4756,9 @@ const STORY = {
       if (id === 'lame_noire') {
         return `<div class="inventory-actions"><button class="inventory-action-btn" data-action="equip-black-blade">Équiper la lame noire</button></div>`;
       }
+      if (id === 'potion_sombre') return `<div class="inventory-actions"><button class="inventory-action-btn" data-action="use-dark-potion" ${state.hp>=state.maxHp ? 'disabled' : ''}>Boire : +3 Vie, +2 terre noire</button></div>`;
       if (id === 'ampoule_blanche') {
-        const useful = ((state.dexPenalty || 0) > 0 || state.flags.blackEarthContamination);
+        const useful = ((state.dexPenalty || 0) > 0 || contaminationLevel(state)>0);
         return `<div class="inventory-actions"><button class="inventory-action-btn" data-action="use-white-ampoule" ${useful ? '' : 'disabled'}>Utiliser l’Ampoule blanche</button></div>`;
       }
       if (PROTECTION_ITEMS[id]) {
@@ -4821,14 +4826,18 @@ const STORY = {
         return true;
       }
 
+      if (action === 'use-dark-potion') {
+        if (hasItem(state,'potion_sombre') && state.hp<state.maxHp) {state.hp=Math.min(state.maxHp,state.hp+3);removeItem(state,'potion_sombre');raiseContamination(state,2);api.saveState();api.render();} api.openInventory();return true;
+      }
       if (action === 'use-white-ampoule') {
-        if (!hasItem(state, 'ampoule_blanche') || !((state.dexPenalty || 0) > 0 || state.flags.blackEarthContamination)) {
+        if (!hasItem(state, 'ampoule_blanche') || !((state.dexPenalty || 0) > 0 || contaminationLevel(state)>0)) {
           api.openInventory();
           return true;
         }
         removeItem(state, 'ampoule_blanche');
         if ((state.dexPenalty || 0) > 0) state.dexPenalty = Math.max(0, state.dexPenalty - 1);
-        state.flags.blackEarthContamination = false;
+        state.contamination=Math.max(0,contaminationLevel(state)-4);
+        state.flags.blackEarthContamination=state.contamination>0;
         state.flags.usedWhiteAmpoule = true;
         api.saveState();
         api.render();
@@ -4865,7 +4874,6 @@ const STORY = {
         <div class="character-modal-stats">
           <div><span>♥ Vie</span><strong>${state.hp} / ${state.maxHp}</strong></div>
           <div><span>🛡 Protection</span><strong>${currentProtection(state)} / ${maxProtection(state)}</strong></div>
-          <div><span>Chance</span><strong>${state.chance}</strong></div>
           <div><span>Force</span><strong>${force}</strong></div>
           <div><span>Dextérité</span><strong>${dexterity}</strong></div>
           <div><span>Puissance de l’arme</span><strong>${weaponPower}</strong></div>
@@ -4888,7 +4896,7 @@ const STORY = {
     title: 'La Grotte de Valombre',
     description: 'Première aventure de la série de l’Écuyer.',
     access: 'free',
-    contentVersion: 24,
+    contentVersion: 27,
     saveVersion: 18, // Ancien identifiant V40 : migration uniquement. Ne plus l'incrémenter pour une publication.
     stablePlayerSaves: true,
     playerRelease: true,
@@ -4898,9 +4906,9 @@ const STORY = {
     pageByNode: PAGE_BY_NODE,
     padPage,
     imageBaseForPage: n => `La-Grotte-de-Valombre-${padPage(n)}`,
-    imageExtensions: ['png'],
+    imageExtensions: ['webp', 'png'],
     createInitialState,
-    rules: { currentForce, currentDexterity, combatPower, weaponLabel, currentProtection, maxProtection, applyDamage },
+    rules: { currentForce, currentDexterity, combatPower, weaponLabel, currentProtection, maxProtection, applyDamage, raiseContamination },
     characterSheetHtml,
     inventory,
     checkpoints: [

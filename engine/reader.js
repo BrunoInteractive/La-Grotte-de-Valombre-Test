@@ -48,8 +48,6 @@ const modalContent = document.getElementById('modalContent');
 const journalBtn = document.getElementById('journalBtn');
 const journalPanel = document.getElementById('journalPanel');
 const journalCloseBtn = document.getElementById('journalCloseBtn');
-const journalText = document.getElementById('journalText');
-const journalStatus = document.getElementById('journalStatus');
 const bookTitle = document.getElementById('bookTitle');
 const bookEyebrow = document.getElementById('bookEyebrow');
 
@@ -63,7 +61,7 @@ function defaultSeriesProfile() {
     seriesId: BOOK.seriesId,
     heroGender: 'female',
     heroName: 'Aélis',
-    baseStats: { maxHp: 18, chance: 12, force: 8, dexterity: 13 },
+    baseStats: { maxHp: 18, force: 8, dexterity: 13 },
     memory: {},
     completedBooks: []
   };
@@ -109,6 +107,8 @@ function loadState() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return defaultState();
     const previous = JSON.parse(saved);
+    if (!Number.isFinite(previous.contamination)) previous.contamination=previous.flags?.blackEarthContamination ? 1 : 0;
+    if (previous.contamination>=13) {previous.flags=previous.flags||{};previous.flags.blackEarthTransformed=true;}
     if (!previous || typeof previous !== 'object' || Array.isArray(previous)) return defaultState();
     // Les anciens choix, inventaire, caractéristiques et états de combats
     // sont conservés. Seuls d'éventuels champs nouvellement ajoutés prennent
@@ -132,7 +132,6 @@ function syncSeriesFromState() {
   seriesProfile.heroName = state.heroName || (seriesProfile.heroGender === 'male' ? 'Aubin' : 'Aélis');
   seriesProfile.baseStats = {
     maxHp: state.maxHp || seriesProfile.baseStats.maxHp,
-    chance: state.chance || seriesProfile.baseStats.chance,
     force: state.baseForce || seriesProfile.baseStats.force,
     dexterity: state.baseDexterity || seriesProfile.baseStats.dexterity
   };
@@ -163,7 +162,7 @@ function restartFromCheckpoint() {
     const journalBackup = state.journal || '';
     state = { ...defaultState(), ...JSON.parse(saved) };
     state.journal = journalBackup || state.journal || '';
-    saveState(); closeDrawer(); closeModal(); closeJournal(); render();
+    saveState(); closeDrawer(); closeModal(); closeAtlas(); render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (e) { restartGame(); }
 }
@@ -210,13 +209,189 @@ function loadPageImage(pageNumber, title) {
   tryNext();
 }
 
-function ensureJournal() { if (typeof state.journal !== 'string') state.journal = ''; }
-let journalTimer = null;
-function saveJournalNow() { ensureJournal(); state.journal = journalText.value; saveState(); journalStatus.textContent = 'Sauvegardé'; }
-function openJournal() { ensureJournal(); journalText.value = state.journal; journalPanel.classList.remove('hidden'); journalPanel.setAttribute('aria-hidden','false'); }
-function closeJournal() { if (!journalPanel.classList.contains('hidden')) saveJournalNow(); journalPanel.classList.add('hidden'); journalPanel.setAttribute('aria-hidden','true'); }
-function scheduleJournalSave() { journalStatus.textContent = 'Sauvegarde…'; clearTimeout(journalTimer); journalTimer = setTimeout(saveJournalNow, 250); }
-journalText.addEventListener('input', scheduleJournalSave);
+/* Carte narrative V60. Sauvegarde indépendante pour garder les découvertes entre les essais. */
+const ATLAS = BOOK.adventureMap;
+const ATLAS_KEY = `ldveh.book.${BOOK.id}.atlas.v1`;
+const atlasDetails = document.getElementById('atlasDetails');
+const atlasPoints = document.getElementById('atlasPoints');
+const atlasLines = document.getElementById('atlasLines');
+const atlasCanvas = document.getElementById('atlasCanvas');
+const atlasScroller = document.getElementById('atlasScroller');
+const atlasNodes = new Map((ATLAS?.nodes || []).map(node => [node.id, node]));
+const atlasPageAreas = new Map();
+for (const area of (ATLAS?.nodes || [])) for (const page of area.pages) atlasPageAreas.set(page, area.id);
+const atlasKnownEdges = new Set((ATLAS?.edges || []).map(([a,b]) => [a,b].sort().join('|')));
+function atlasEdgeKey(a,b) { return [a,b].sort().join('|'); }
+function atlasDefaultMemory() {return {version:1,visited:[],facts:[],edges:[],deaths:[],lastShown:''};}
+function atlasLoadMemory() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(ATLAS_KEY));
+    if (!saved || typeof saved !== 'object') return atlasDefaultMemory();
+    const initial = atlasDefaultMemory();
+    for (const key of ['visited','facts','edges','deaths']) {
+      initial[key] = Array.isArray(saved[key]) ? saved[key].filter(value => typeof value === 'string') : [];
+    }
+    initial.lastShown = typeof saved.lastShown === 'string' ? saved.lastShown : '';
+    return initial;
+  } catch {return atlasDefaultMemory();}
+}
+let atlasMemory = atlasLoadMemory();
+function atlasSaveMemory() {try {localStorage.setItem(ATLAS_KEY, JSON.stringify(atlasMemory));} catch (e) {}}
+function atlasRoute() {
+  const sequence = Array.isArray(state.history) ? state.history.slice() : [];
+  if (state.node && !sequence.includes(state.node)) sequence.push(state.node);
+  const areas = [];
+  for (const page of sequence) {
+    const area = atlasPageAreas.get(page);
+    if (area && areas[areas.length-1] !== area) areas.push(area);
+  }
+  return areas;
+}
+function atlasSync() {
+  if (!ATLAS) return false;
+  let changed = false;
+  const discovered = new Set(atlasMemory.visited);
+  const facts = new Set(atlasMemory.facts);
+  const edges = new Set(atlasMemory.edges);
+  const deathPages = new Set(atlasMemory.deaths);
+  const sequence = Array.isArray(state.history) ? state.history.slice() : [];
+  if (state.node && !sequence.includes(state.node) && state.node !== 'start') sequence.push(state.node);
+  let lastArea = '';
+  for (const page of sequence) {
+    const area = atlasPageAreas.get(page);
+    if (!area) {lastArea='';continue;}
+    if (!discovered.has(area)) {discovered.add(area);changed=true;}
+    const info = atlasNodes.get(area);
+    for (const note of (info.notes || [])) {
+      const key = `${area}:${note.page}`;
+      if (note.page === page && (!note.requiresFlag || !!state.flags?.[note.requiresFlag]) && !facts.has(key)) {facts.add(key);changed=true;}
+    }
+    if (lastArea && lastArea !== area) {
+      const key = atlasEdgeKey(lastArea,area);
+      // Un saut du menu de test ne doit jamais inventer une nouvelle branche.
+      if (atlasKnownEdges.has(key) && !edges.has(key)) {edges.add(key);changed=true;}
+    }
+    lastArea = area;
+  }
+  const isDead = (ATLAS.deathPages || []).includes(state.node) || state.hp <= 0 || !!state.flags?.blackEarthTransformed;
+  if (isDead && atlasPageAreas.has(state.node) && !deathPages.has(state.node)) {
+    deathPages.add(state.node);changed=true;
+  }
+  if (changed) {
+    atlasMemory.visited=[...discovered];atlasMemory.facts=[...facts];atlasMemory.edges=[...edges];atlasMemory.deaths=[...deathPages];atlasSaveMemory();
+  }
+  // La dernière page publiée est un bilan d'étape, pas la fin du livre.
+  const isEnding = (ATLAS.endingPages || []).includes(state.node) && state.hp > 0;
+  if (!isDead && !isEnding) return false;
+  const token = `${state.node}:${(state.history || []).length}:${isDead ? 'mort' : 'étape'}`;
+  if (atlasMemory.lastShown === token) return false;
+  atlasMemory.lastShown=token;atlasSaveMemory();
+  return true;
+}
+function atlasSvgPath(start,end,stroke,dash,width) {
+  const svgNS='http://www.w3.org/2000/svg';
+  const line=document.createElementNS(svgNS,'path');
+  line.setAttribute('d',`M ${start.x} ${start.y} L ${end.x} ${end.y}`);
+  line.setAttribute('fill','none');line.setAttribute('stroke',stroke);
+  line.setAttribute('stroke-width',String(width || 3));
+  line.setAttribute('stroke-linecap','round');
+  if (dash) line.setAttribute('stroke-dasharray',dash);
+  atlasLines.appendChild(line);
+}
+function atlasStub(from,to) {
+  const dx=to.x-from.x,dy=to.y-from.y;
+  const length=Math.hypot(dx,dy)||1;
+  const distance=Math.min(48,length*.34);
+  atlasSvgPath(from,{x:from.x+dx/length*distance,y:from.y+dy/length*distance},'#907653','6 6',3);
+}
+function atlasShowDetails(area) {
+  atlasDetails.replaceChildren();
+  const heading=document.createElement('h4');heading.textContent=area.label;atlasDetails.appendChild(heading);
+  const facts=area.notes.filter(note => ATLAS.mode === 'work' || atlasMemory.facts.includes(`${area.id}:${note.page}`));
+  if (!facts.length) {
+    const hint=document.createElement('p');hint.className='atlas-hint';hint.textContent='Aucune découverte narrative enregistrée dans ce lieu.';atlasDetails.appendChild(hint);
+    return;
+  }
+  facts.forEach(note => {
+    const item=document.createElement('div');item.className='atlas-fact';
+    const text=document.createElement('p');text.textContent=note.text;item.appendChild(text);
+    if (ATLAS.mode === 'work') {
+      const page=document.createElement('small');page.textContent=`Page ${note.page.slice(1).padStart(3,'0')}`;item.appendChild(page);
+    }
+    atlasDetails.appendChild(item);
+  });
+}
+function atlasDraw() {
+  if (!ATLAS) return;
+  atlasCanvas.style.width=`${ATLAS.width}px`;
+  atlasCanvas.style.height=`${ATLAS.height}px`;
+  atlasLines.setAttribute('viewBox',`0 0 ${ATLAS.width} ${ATLAS.height}`);
+  atlasLines.replaceChildren();atlasPoints.replaceChildren();
+  const fullyVisible=ATLAS.mode === 'work';
+  const seen=new Set(atlasMemory.visited);
+  const walked=new Set(atlasMemory.edges);
+  const route=atlasRoute();const currentEdges=new Set();
+  for (let i=1;i<route.length;i++) currentEdges.add(atlasEdgeKey(route[i-1],route[i]));
+  const visible=id => fullyVisible || seen.has(id);
+  (ATLAS.edges || []).forEach(([a,b]) => {
+    const first=atlasNodes.get(a),second=atlasNodes.get(b);
+    if (!first || !second) return;
+    const used=walked.has(atlasEdgeKey(a,b)),active=currentEdges.has(atlasEdgeKey(a,b));
+    if (used && visible(a) && visible(b)) atlasSvgPath(first,second,active?'#795632':'#a58a62','',active?5:3);
+    else if (fullyVisible) atlasSvgPath(first,second,'#baaa8b','5 7',2);
+    else {
+      if (visible(a)) atlasStub(first,second);
+      if (visible(b)) atlasStub(second,first);
+    }
+  });
+  // Au terme de la version d'essai, les trois amorces visibles dans la scène
+  // sont dessinées sans révéler les pages ou les noms des lieux à venir.
+  if (ATLAS.mode === 'player' && seen.has('monde')) {
+    const origin=atlasNodes.get('monde');
+    for (const [dx,dy] of [[-145,95],[0,105],[145,95]]) {
+      const length=Math.hypot(dx,dy);atlasSvgPath(origin,{x:origin.x+dx/length*56,y:origin.y+dy/length*56},'#907653','6 6',3);
+    }
+  }
+  for (const area of ATLAS.nodes) {
+    if (!visible(area.id)) continue;
+    const notes=area.notes.filter(note => fullyVisible || atlasMemory.facts.includes(`${area.id}:${note.page}`));
+    const clickable=notes.length>0;
+    const el=document.createElement(clickable?'button':'div');
+    if (clickable) {el.type='button';el.addEventListener('click',()=>atlasShowDetails(area));
+      el.setAttribute('aria-label',`Découvertes : ${area.label}`);}
+    el.className='atlas-location'+(clickable?' atlas-clickable':'')+(seen.has(area.id)?' atlas-discovered':'')+
+      (atlasPageAreas.get(state.node)===area.id?' atlas-active':'');
+    el.style.left=`${area.x}px`;el.style.top=`${area.y}px`;
+    const dot=document.createElement('span');dot.className='atlas-dot';dot.setAttribute('aria-hidden','true');el.appendChild(dot);
+    const label=document.createElement('span');label.className='atlas-name';label.textContent=area.label;el.appendChild(label);
+    if (clickable){const clue=document.createElement('span');clue.className='atlas-clue';clue.textContent='◆';clue.setAttribute('aria-hidden','true');el.appendChild(clue);}
+    if (area.pages.some(page=>atlasMemory.deaths.includes(page))){const cross=document.createElement('span');cross.className='atlas-death';cross.textContent='×';cross.setAttribute('aria-label','Mort sur ce chemin');el.appendChild(cross);}
+    atlasPoints.appendChild(el);
+  }
+  const hint=document.createElement('p');hint.className='atlas-hint';
+  hint.textContent=fullyVisible ? 'Carte complète de travail. Les points ◆ ouvrent les indices et indiquent leurs pages. Cette carte ne modifie pas le parcours du héros.' : 'Les lieux et les découvertes s’ajoutent à mesure que tu avances. Les petits traits indiquent d’autres chemins possibles.';
+  atlasDetails.replaceChildren(hint);
+}
+function openAtlas(summary=false) {
+  if (!ATLAS) return;
+  atlasSync();atlasDraw();
+  journalPanel.classList.remove('hidden');journalPanel.setAttribute('aria-hidden','false');
+  if (summary) {
+    const notice=document.createElement('p');notice.className='atlas-hint';
+    notice.textContent=state.hp<=0 || state.flags?.blackEarthTransformed || (ATLAS.deathPages || []).includes(state.node)
+      ? 'Ton aventure s’arrête ici. La carte conserve cette tentative et les chemins à explorer.'
+      : ATLAS.mode==='player'?'Fin de cette étape de l’aventure. La suite n’est pas encore publiée.':'Bilan de ce parcours : les autres branches restent consultables.';
+    atlasDetails.replaceChildren(notice);
+  }
+  const current=atlasNodes.get(atlasPageAreas.get(state.node));
+  if (current) {
+    // Centre la zone en cours, sans dépendre d'une fonction de défilement du navigateur.
+    atlasScroller.scrollLeft=Math.max(0,current.x-atlasScroller.clientWidth/2);
+    atlasScroller.scrollTop=Math.max(0,current.y-atlasScroller.clientHeight/2);
+  } else {atlasScroller.scrollTop=0;atlasScroller.scrollLeft=0;}
+  journalCloseBtn.focus();
+}
+function closeAtlas() {journalPanel.classList.add('hidden');journalPanel.setAttribute('aria-hidden','true');}
 
 function render() {
   const node = STORY[state.node] || STORY.start;
@@ -254,14 +429,16 @@ function render() {
   statusTags.innerHTML = '';
   if (!node.sheet) {
     const protection = BOOK.rules && typeof BOOK.rules.currentProtection === 'function' ? BOOK.rules.currentProtection(state) : 0;
-    const labels = [`♥ ${state.hp}/${state.maxHp}`, `🛡 ${protection}`, `Chance ${state.chance}`, `Force ${currentForce(state)}`, `Dextérité ${currentDexterity(state)}`, `Puissance de l’arme ${state.weapon === 'none' ? 0 : combatPower(state)}`];
+    const labels = [`♥ ${state.hp}/${state.maxHp}`, `🛡 ${protection}`, `Force ${currentForce(state)}`, `Dextérité ${currentDexterity(state)}`, `Puissance de l’arme ${state.weapon === 'none' ? 0 : combatPower(state)}`];
+    if (state.contamination>0) labels.push(`Terre noire ${state.contamination}/13`);
+    if (state.flags?.physicianNotesRead && state.contamination >= 9 && state.contamination < 13) labels.push(state.contamination >= 12 ? '⚠ Transformation très proche' : '⚠ Risque de transformation');
     if (state.silver > 0) labels.push(`${state.silver} argent`);
     if (state.goldCoins > 0) labels.push(`${state.goldCoins} or`);
     labels.forEach(label => { const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = label; statusTags.appendChild(tag); });
   }
 
   const rawChoices = typeof node.choices === 'function' ? node.choices(state) : (node.choices || []);
-  const availableChoices = BOOK.playerRelease
+  const availableChoices = state.flags?.blackEarthTransformed && !node.sheet ? [{label:"Reprendre au dernier point de sauvegarde",action:"checkpoint"},{label:"Recommencer",action:"restart"}] : BOOK.playerRelease
     ? rawChoices.filter(choice => !choice.to || !/^c\d+$/.test(choice.to) || !!PAGE_BY_NODE[choice.to])
     : rawChoices;
   // Une fin de démo n'est pas une fin de partie. On sauvegarde l'emplacement
@@ -270,6 +447,7 @@ function render() {
   if (BOOK.playerRelease && rawChoices.length > 0 && availableChoices.length === 0 && state.hp > 0) {
     storyText.insertAdjacentHTML('beforeend', '<p class="ending">FIN DE CETTE VERSION D’ESSAI</p><p>Ta progression est enregistrée. Reviens après la prochaine mise à jour : tu pourras poursuivre cette aventure avec ton personnage, ton inventaire et tes choix.</p>');
   }
+  if (state.flags?.blackEarthTransformed && !node.sheet) storyText.innerHTML='<p>La terre noire transforme ton corps. Tu deviens un gardien de la prison.</p><p><strong>Fin de l’aventure.</strong></p>';
   choices.innerHTML = '';
   availableChoices.forEach((choice, i) => {
     const btn = document.createElement('button');
@@ -287,12 +465,14 @@ function render() {
     });
     choices.appendChild(btn);
   });
+  if (atlasSync()) Promise.resolve().then(() => openAtlas(true));
 }
 
 function restartGame() {
+  atlasMemory.lastShown=''; atlasSaveMemory();
   state = defaultState();
   try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(CHECKPOINT_KEY); } catch (e) {}
-  saveState(); closeDrawer(); closeModal(); closeJournal(); render();
+  saveState(); closeDrawer(); closeModal(); closeAtlas(); render();
   try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0,0); }
 }
 
@@ -395,15 +575,15 @@ modalContent.addEventListener('click', event => {
 
 inventoryBtn.addEventListener('click', openInventory);
 characterBtn.addEventListener('click', openCharacterSheet);
-journalBtn.addEventListener('click', openJournal);
-journalCloseBtn.addEventListener('click', closeJournal);
+journalBtn.addEventListener('click', () => openAtlas());
+journalCloseBtn.addEventListener('click', closeAtlas);
 restartBtn.addEventListener('click', restartGame);
 if (menuBtn) menuBtn.addEventListener('click', openDrawer);
 if (closeDrawerBtn) closeDrawerBtn.addEventListener('click', closeDrawer);
 if (drawerBackdrop) drawerBackdrop.addEventListener('click', closeDrawer);
 closeModalBtn.addEventListener('click', closeModal);
 modalBackdrop.addEventListener('click', closeModal);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDrawer(); closeModal(); closeJournal(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDrawer(); closeModal(); closeAtlas(); } });
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(() => {});
 render();
