@@ -321,11 +321,49 @@ function atlasShowDetails(area) {
     atlasDetails.appendChild(item);
   });
 }
+// Mobile: remap both axes (not just CSS width). Labels retain their normal font size.
+// The original scene graph, choices, memories and desktop positions remain untouched.
+let atlasPositions = new Map();
+function atlasLayout() {
+  const available=atlasScroller.clientWidth;
+  if (!available || available>620) {
+    return {width:ATLAS.width,height:ATLAS.height,positions:new Map(ATLAS.nodes.map(n=>[n.id,{x:n.x,y:n.y}]))};
+  }
+  const width=Math.min(400,Math.max(280,available-8));
+  const rows=[];
+  for (const node of [...ATLAS.nodes].sort((a,b)=>a.y-b.y || a.x-b.x)) {
+    let row=rows[rows.length-1];
+    if (!row || node.y-row.y>18) {row={y:node.y,nodes:[]};rows.push(row);}
+    row.nodes.push(node);
+  }
+  const positions=new Map();
+  rows.forEach((row,index)=>{
+    // A single central choice stays on the centreline: straight vertical path.
+    const group=row.nodes.slice().sort((a,b)=>a.x-b.x);
+    const left=width/2;
+    const factor=(width-80)/520;
+    const xs=group.map(node=>group.length===1 && node.x>=260 && node.x<=460
+      ?left : left+(node.x-340)*factor);
+    for (let i=1;i<xs.length;i++) xs[i]=Math.max(xs[i],xs[i-1]+85);
+    if (xs[xs.length-1]>width-42) {
+      const excess=xs[xs.length-1]-(width-42);
+      for(let i=0;i<xs.length;i++)xs[i]-=excess;
+    }
+    if(xs[0]<42) {
+      const deficit=42-xs[0];
+      for(let i=0;i<xs.length;i++)xs[i]+=deficit;
+    }
+    group.forEach((node,i)=>positions.set(node.id,{x:Math.round(xs[i]),y:36+index*46}));
+  });
+  return {width,height:36+Math.max(0,rows.length-1)*46+48,positions};
+}
 function atlasDraw() {
   if (!ATLAS) return;
-  atlasCanvas.style.width=`${ATLAS.width}px`;
-  atlasCanvas.style.height=`${ATLAS.height}px`;
-  atlasLines.setAttribute('viewBox',`0 0 ${ATLAS.width} ${ATLAS.height}`);
+  const layout=atlasLayout();
+  atlasPositions=layout.positions;
+  atlasCanvas.style.width=`${layout.width}px`;
+  atlasCanvas.style.height=`${layout.height}px`;
+  atlasLines.setAttribute('viewBox',`0 0 ${layout.width} ${layout.height}`);
   atlasLines.replaceChildren();atlasPoints.replaceChildren();
   const fullyVisible=ATLAS.mode === 'work';
   const seen=new Set(atlasMemory.visited);
@@ -334,7 +372,7 @@ function atlasDraw() {
   for (let i=1;i<route.length;i++) currentEdges.add(atlasEdgeKey(route[i-1],route[i]));
   const visible=id => fullyVisible || seen.has(id);
   (ATLAS.edges || []).forEach(([a,b]) => {
-    const first=atlasNodes.get(a),second=atlasNodes.get(b);
+    const first=atlasPositions.get(a),second=atlasPositions.get(b);
     if (!first || !second) return;
     const used=walked.has(atlasEdgeKey(a,b)),active=currentEdges.has(atlasEdgeKey(a,b));
     if (used && visible(a) && visible(b)) atlasSvgPath(first,second,active?'#795632':'#a58a62','',active?5:3);
@@ -347,7 +385,7 @@ function atlasDraw() {
   // Au terme de la version d'essai, les trois amorces visibles dans la scène
   // sont dessinées sans révéler les pages ou les noms des lieux à venir.
   if (ATLAS.mode === 'player' && seen.has('monde')) {
-    const origin=atlasNodes.get('monde');
+    const origin=atlasPositions.get('monde');
     for (const [dx,dy] of [[-80,55],[0,65],[80,55]]) {
       const length=Math.hypot(dx,dy);atlasSvgPath(origin,{x:origin.x+dx/length*31,y:origin.y+dy/length*31},'#907653','6 6',3);
     }
@@ -361,7 +399,8 @@ function atlasDraw() {
       el.setAttribute('aria-label',`Découvertes : ${area.label}`);}
     el.className='atlas-location'+(clickable?' atlas-clickable':'')+(seen.has(area.id)?' atlas-discovered':'')+
       (atlasPageAreas.get(state.node)===area.id?' atlas-active':'');
-    el.style.left=`${area.x}px`;el.style.top=`${area.y}px`;
+    const position=atlasPositions.get(area.id);
+    el.style.left=`${position.x}px`;el.style.top=`${position.y}px`;
     const dot=document.createElement('span');dot.className='atlas-dot';dot.setAttribute('aria-hidden','true');el.appendChild(dot);
     const label=document.createElement('span');label.className='atlas-name';label.textContent=area.label;el.appendChild(label);
     if (clickable){const clue=document.createElement('span');clue.className='atlas-clue';clue.textContent='◆';clue.setAttribute('aria-hidden','true');el.appendChild(clue);}
@@ -374,8 +413,10 @@ function atlasDraw() {
 }
 function openAtlas(summary=false) {
   if (!ATLAS) return;
-  atlasSync();atlasDraw();
+  atlasSync();
+  // Measure the actual mobile viewport after making the panel visible.
   journalPanel.classList.remove('hidden');journalPanel.setAttribute('aria-hidden','false');
+  atlasDraw();
   if (summary) {
     const notice=document.createElement('p');notice.className='atlas-hint';
     notice.textContent=state.hp<=0 || state.flags?.blackEarthTransformed || (ATLAS.deathPages || []).includes(state.node)
@@ -383,7 +424,7 @@ function openAtlas(summary=false) {
       : ATLAS.mode==='player'?'Fin de cette étape de l’aventure. La suite n’est pas encore publiée.':'Bilan de ce parcours : les autres branches restent consultables.';
     atlasDetails.replaceChildren(notice);
   }
-  const current=atlasNodes.get(atlasPageAreas.get(state.node));
+  const current=atlasPositions.get(atlasPageAreas.get(state.node));
   if (current) {
     // Centre la zone en cours, sans dépendre d'une fonction de défilement du navigateur.
     atlasScroller.scrollLeft=Math.max(0,current.x-atlasScroller.clientWidth/2);
@@ -575,6 +616,9 @@ modalContent.addEventListener('click', event => {
 
 inventoryBtn.addEventListener('click', openInventory);
 characterBtn.addEventListener('click', openCharacterSheet);
+window.addEventListener('resize', () => {
+  if (!journalPanel.classList.contains('hidden')) atlasDraw();
+});
 journalBtn.addEventListener('click', () => openAtlas());
 journalCloseBtn.addEventListener('click', closeAtlas);
 restartBtn.addEventListener('click', restartGame);
