@@ -420,6 +420,16 @@ function dormantPerception(state, location) {
   }
   return '';
 }
+function collectVeilleurBrassard(state) {
+  if (state.flags.brassardPris || hasItem(state, 'brassard_veilleurs')) {
+    state.flags.brassardPris = true;
+    return false;
+  }
+  state.flags.brassardPris = true;
+  addItem(state, 'brassard_veilleurs', 'Brassard des Veilleurs',
+    'Un brassard sombre étonnamment léger une fois porté. +1 Force.');
+  return true;
+}
 function equipVeilleurCollar(state) {
   if (state.flags.collarEquipped || state.flags.collarTorn) return;
   state.flags.collarEquipped = true;
@@ -671,7 +681,9 @@ const STORY = {
       }
     },
     text: state => `
-      <p>Tu ouvres la sacoche. À l’intérieur, tu trouves <strong>trois pièces d’argent</strong>, une petite <strong>fiole rouge sombre</strong> et un morceau de parchemin plié plusieurs fois.</p>
+      ${state.history?.filter(id => id === 'c2').length > 1
+        ? '<p>Tu rouvres la sacoche d’Aldren. Les trois pièces et les notes ont déjà été récupérées ; tu peux néanmoins relire le parchemin et revoir tes choix.</p>'
+        : '<p>Tu ouvres la sacoche. À l’intérieur, tu trouves <strong>trois pièces d’argent</strong>, une petite <strong>fiole rouge sombre</strong> et un morceau de parchemin plié plusieurs fois.</p>'}
       <p>Le papier est froissé, taché, presque déchiré par endroits. Certaines lignes ont été griffonnées si fort que la plume a failli percer la feuille.</p>
       <p>Tu le déplies. Ce n’est pas vraiment un message. Plutôt des notes jetées à la hâte, comme pour fixer des idées avant de les oublier.</p>
 
@@ -685,7 +697,9 @@ const STORY = {
       </div>
 
       <p>Les premières lignes ont été écrites avec une insistance presque fébrile. Les avertissements, eux, ne laissent guère de doute : Aldren voulait éviter la terre noire et le soufre.</p><p>Mais pourquoi voulait-il ouvrir cet œil fermé ?</p>
-      <p>Tu replies soigneusement les notes et les ranges dans ton inventaire. Tu pourras les relire quand tu le souhaites.</p>
+      ${state.history?.filter(id => id === 'c2').length > 1
+        ? '<p>Tu refermes les notes et les remets avec tes affaires.</p>'
+        : '<p>Tu replies soigneusement les notes et les ranges dans ton inventaire. Tu pourras les relire quand tu le souhaites.</p>'}
       ${hasItem(state,'fiole_rouge') || state.flags.fioleLaissee
         ? '<p>Tu as déjà décidé quoi faire de la mystérieuse fiole rouge.</p>'
         : '<p>La fiole rouge reste entre tes mains. Tu ignores encore ce qu’elle contient.</p>'}
@@ -2029,6 +2043,9 @@ const STORY = {
           s.lastCombatOutcome = roll3D6(s, 'Force', currentForce(s))
             ? 'force_success'
             : 'force_fail';
+          s.flags.galleryBrassardJustWon = s.lastCombatOutcome === 'force_success'
+            ? collectVeilleurBrassard(s)
+            : false;
         }
       },
       { label: 'Renoncer et revenir au croisement des galeries', to: 'c30', effect: rememberCampJournalIfVisited }
@@ -2040,15 +2057,10 @@ const STORY = {
     title: '',
     noImage: true,
     image: 'La pierre',
+    // Secours pour les anciennes sauvegardes déjà placées après un jet réussi.
     onEnter: s => {
       if (s.lastCombatOutcome === 'force_success' && !s.flags.brassardPris) {
-        s.flags.brassardPris = true;
-        addItem(
-          s,
-          'brassard_veilleurs',
-          'Brassard des Veilleurs',
-          'Un brassard sombre étonnamment léger une fois porté. +1 Force.'
-        );
+        s.flags.galleryBrassardJustWon = collectVeilleurBrassard(s);
       }
     },
     text: state => {
@@ -2068,11 +2080,9 @@ const STORY = {
 
           <p>Un squelette est assis contre le mur. Autour de son avant-bras repose un brassard de métal sombre.</p>
 
-          <p>Lorsque tu le prends, il paraît incroyablement lourd.</p>
-
-          <p>Une fois passé autour de ton bras, son poids disparaît presque totalement.</p>
-
-          <p><strong>Brassard des Veilleurs : +1 Force.</strong></p>
+          ${state.flags.galleryBrassardJustWon
+            ? '<p>Tu le prends. Il paraît incroyablement lourd, puis son poids disparaît presque totalement une fois passé autour de ton bras.</p><p><strong>Brassard des Veilleurs : +1 Force.</strong></p>'
+            : '<p>Le brassard a déjà été récupéré. Il n’y a aucun autre objet à prendre ici.</p>'}
         `;
       }
 
@@ -3626,7 +3636,9 @@ const STORY = {
       }
     },
     text: state => `
-      <p>Tu ouvres la sacoche. À l’intérieur, trois lames de jet sont enveloppées dans un morceau de toile, à côté d’un parchemin plié.</p>
+      ${state.history?.filter(id => id === 'c65').length > 1
+        ? '<p>Tu rouvres la sacoche. L’emplacement des trois lames est vide ; le parchemin est toujours là.</p>'
+        : '<p>Tu ouvres la sacoche. À l’intérieur, trois lames de jet sont enveloppées dans un morceau de toile, à côté d’un parchemin plié.</p>'}
 
       <p>Un œil fermé est imprimé au bas du texte.</p>
 
@@ -3636,9 +3648,9 @@ const STORY = {
       Toute tentative de fuite sera punie de mort.<br>
       Tout garde refusant d’appliquer cet ordre subira la même peine. »</blockquote>
 
-      <p>Tu ranges les trois lames de jet dans ton équipement.</p>
-
-      <p><strong>Tu possèdes maintenant ${state.throwingBlades} lame${state.throwingBlades > 1 ? 's' : ''} de jet.</strong></p>
+      ${state.history?.filter(id => id === 'c65').length > 1
+        ? '<p>Les trois lames de cette sacoche ont déjà été récupérées.</p>'
+        : `<p>Tu ranges les trois lames de jet dans ton équipement.</p><p><strong>Tu possèdes maintenant ${state.throwingBlades} lame${state.throwingBlades > 1 ? 's' : ''} de jet.</strong></p>`}
     `,
     choices: state => {
       if (hasItem(state, 'ceinture_rouge')) {
@@ -3923,10 +3935,13 @@ const STORY = {
   },
   c81: {
     number: 'PAGE 81', title: 'L’armurerie', image: 'La réserve d’armes',
-    text: `
+    text: s => `
       <p>Des râteliers longent les murs. Les épées et les casques qu'ils supportent sont rongés par la rouille.</p>
-      <p>Dans une boîte restée fermée, tu trouves cinq petites lames de jet encore en état de servir.</p>
-      <p>Tu peux les emporter. Aucun autre équipement ne paraît sûr.</p>`,
+      ${s.flags.armoryLooted || s.visited?.c136
+        ? (s.visited?.c136 || s.flags.armoryBladesTaken
+          ? '<p>La boîte dans laquelle tu as pris les cinq lames est désormais vide.</p>'
+          : '<p>Les cinq lames sont toujours dans leur boîte. Tu avais choisi de les laisser.</p>')
+        : '<p>Dans une boîte restée fermée, tu trouves cinq petites lames de jet encore en état de servir.</p><p>Tu peux les emporter. Aucun autre équipement ne paraît sûr.</p>'}`,
     choices: s => s.flags.armoryLooted ? [{ label: 'Rejoindre les bureaux', to: 'c82' }] : [
       { label: 'Prendre les cinq lames de jet', to: 'c136', effect: s => { if (!s.flags.armoryLooted) { s.throwingBlades += 5; syncThrowingBlades(s); s.flags.armoryLooted = true; } } },
       { label: 'Laisser les lames et rejoindre les bureaux', to: 'c82', effect: s => { s.flags.armoryLooted = true; } }
@@ -3941,20 +3956,20 @@ const STORY = {
     choices: s => s.flags.officeAttempted
       ? [{ label: 'Poursuivre vers les appartements', to: 'c84' }]
       : [
-          { label: 'Tenter d’enfoncer la porte — épreuve de Force', to: 'c83', effect: s => { s.flags.officeAttempted = true; s.flags.officeOpened = roll3D6(s, 'Force', currentForce(s)); } },
+          { label: 'Tenter d’enfoncer la porte — épreuve de Force', to: 'c83', effect: s => { s.flags.officeAttempted = true; s.flags.officeOpened = roll3D6(s, 'Force', currentForce(s)); s.flags.officeRollCount = s.rollCount; } },
           { label: 'Laisser la porte et gagner les appartements', to: 'c84' }
         ]
   },
   c83: {
-    number: 'PAGE 83', title: 'Les ordres du commandement', noImage: true, image: 'Le bureau des ordres',
-    text: s => s.flags.officeOpened || s.visited?.c83 && !s.flags.officeAttempted ? `
-      ${s.flags.officeAttempted ? diceResultHtml(s) : ''}
+    number: 'PAGE 83', title: '', noImage: true, image: 'Le bureau des ordres',
+    text: s => s.flags.officeOpened ? `
+      ${s.flags.officeRollCount === s.rollCount ? diceResultHtml(s) : ''}
       <p>La porte cède. Des tablettes et des registres sont restés ouverts sur un pupitre.</p>
       <p>Les premières instructions prévoient d'isoler les personnes contaminées et de chercher des soins. Les suivantes ont changé de ton :</p>
       <blockquote>AU PREMIER SOUPÇON, EXÉCUTER.</blockquote>
       <p>Plusieurs condamnations portent une seule justification : « Soupçon ».</p>
       <p>Dans la marge, une autre main a écrit : « Et si nous nous trompions ? » La phrase a été rayée jusqu'à creuser la pierre.</p>` : `
-      ${diceResultHtml(s)}
+      ${s.flags.officeRollCount === s.rollCount ? diceResultHtml(s) : ''}
       <p>Tu pousses de toutes tes forces. La serrure grince, mais la porte tient bon.</p>
       <p>Tu renonces à t'acharner et rejoins le passage des appartements.</p>`,
     choices: [{ label: 'Rejoindre les appartements', to: 'c84' }]
@@ -4022,12 +4037,16 @@ const STORY = {
     number: 'PAGE 89', title: 'Le métal sous la peau', noImage: true, image: 'Le collier incrusté',
     onEnter: s => equipVeilleurCollar(s),
     text: s => `
-      <p>Tu passes le collier autour de ton cou.</p>
+      ${s.flags.collarTorn
+        ? '<p>Tu reviens sur les lieux. Le collier a déjà été arraché et ne peut plus être porté ; tu n’obtiens aucun nouveau bonus.</p>'
+        : s.history?.filter(id => id === 'c89').length > 1
+          ? '<p>Le collier est déjà incrusté autour de ton cou. Ses effets sont toujours ceux de la première fois : +3 Vie maximale, −1 Dextérité et +1 contamination à la pose. Aucun effet supplémentaire n’est appliqué.</p>'
+          : `<p>Tu passes le collier autour de ton cou.</p>
       <p>Un regain de vitalité te traverse. Puis le métal se resserre. Ses bords s'enfoncent dans ta peau. La poussière noire accumulée au fermoir pénètre dans la blessure.</p>
       <p>Tu essaies de le soulever : il est incrusté dans la chair. L'arracher te blesserait gravement.</p>
       <p>Une raideur gagne tes épaules et tes mouvements perdent en précision.</p>
       <p><strong>Vie actuelle et maximale : +3. Dextérité : −1. Contamination : +1.</strong></p>
-      <p>Le collier apparaît dans ton inventaire. Tu pourras tenter de l'arracher à tout moment, mais la blessure te coûtera encore un point de Vie en plus des trois points gagnés.</p>
+      <p>Le collier apparaît dans ton inventaire. Tu pourras tenter de l'arracher à tout moment, mais la blessure te coûtera encore un point de Vie en plus des trois points gagnés.</p>`}
       <p>Les autres corps remuent. Tu dois quitter la salle.</p>`,
     choices: [{ label: 'Fuir par la fissure', to: 'c91' }]
   },
@@ -4217,6 +4236,7 @@ const STORY = {
           t.flags.injectionDodged = roll3D6(t, 'Dextérité', currentDexterity(t));
           t.flags.labLeverRollCount = t.rollCount;
           t.flags.labLeverResultReady = true;
+          t.flags.labLeverNewInjection = !t.flags.injectionDodged && !t.flags.labInjected;
           if (!t.flags.injectionDodged) injectBlackEarth(t);
         }
       }] : []),
@@ -4352,7 +4372,7 @@ const STORY = {
             t.flags.labAmpouleTaken = true;
           } }]
         : []),
-      { label: 'Revenir dans la salle des injections', to: 'c102' },
+      ...(!s.flags.labLeverTried ? [{ label: 'Examiner le mécanisme', to: 'c103' }] : []),
       { label: 'Quitter le laboratoire', to: 'c104' }
     ]
   },
@@ -4364,11 +4384,13 @@ const STORY = {
   },
   c145: {
     number: 'PAGE 145', title: '', image: 'Le bouclier du chevalier',
-    text: s => hasItem(s, 'bouclier_chevalier')
-      ? `<p>Tu passes l’avant-bras dans les sangles du petit bouclier. Il est désormais dans ton équipement.</p>`
+    text: s => s.flags.knightShieldTaken || hasItem(s, 'bouclier_chevalier')
+      ? (shieldIsActive(s)
+        ? `<p>Le petit bouclier est déjà dans ton équipement. Il lui reste ${s.protectionItems.bouclier_chevalier.remaining} point${s.protectionItems.bouclier_chevalier.remaining > 1 ? 's' : ''} de protection.</p>`
+        : `<p>Le bouclier que tu avais récupéré est désormais brisé. Il ne peut plus te protéger.</p>`)
       : `<p>Contre le pied de la table repose un petit bouclier de métal cabossé. Ses sangles tiennent encore.</p>
          <p>Il pourrait absorber plusieurs coups, mais son poids ralentira tes mouvements.</p>`,
-    choices: s => hasItem(s, 'bouclier_chevalier')
+    choices: s => s.flags.knightShieldTaken || hasItem(s, 'bouclier_chevalier')
       ? [{ label: 'Quitter la cellule', to: 'c98' }]
       : [
         { label: 'Prendre le bouclier (Protection +6, Dextérité −1)', stay: true, effect: addKnightShield },
@@ -4434,9 +4456,10 @@ const STORY = {
       : `${diceResultHtml(s)}
         ${s.flags.injectionDodged
           ? '<p>Tu actionnes le levier avec prudence, puis te jettes sur le côté. L’aiguille frappe la table et le mécanisme se bloque. Le contrepoids cesse enfin de heurter la cloison.</p>'
-          : '<p>À peine le levier bouge-t-il que l’aiguille se détend et s’enfonce dans ton bras. Une brûlure remonte jusqu’à l’épaule.</p><p>Tu te dégages et recules. Tes muscles se contractent : une force nouvelle les parcourt. Pendant quelques secondes, tu ne sais plus où tu es. Tes gestes perdent en précision.</p><p><strong>+2 Force, −1 Dextérité. Terre noire : contamination accrue.</strong> Ces effets durent tant que l’injection n’a pas été traitée.</p>'}`,
+          : s.flags.labLeverNewInjection !== false
+            ? '<p>À peine le levier bouge-t-il que l’aiguille se détend et s’enfonce dans ton bras. Une brûlure remonte jusqu’à l’épaule.</p><p>Tu te dégages et recules. Tes muscles se contractent : une force nouvelle les parcourt. Pendant quelques secondes, tu ne sais plus où tu es. Tes gestes perdent en précision.</p><p><strong>+2 Force, −1 Dextérité. Terre noire : contamination accrue.</strong> Ces effets durent tant que l’injection n’a pas été traitée.</p>'
+            : '<p>L’aiguille te touche à nouveau, mais la dose précédente agit déjà sur ton corps. Aucun bonus, malus ni point de contamination supplémentaire n’est appliqué.</p>'}`,
     choices: [
-      { label: 'Revenir examiner le mécanisme', to: 'c103' },
       { label: 'Fouiller les réserves médicales', to: 'c138' },
       { label: 'Quitter le laboratoire', to: 'c104' }
     ]
@@ -5000,7 +5023,7 @@ const STORY = {
     title: 'La Grotte de Valombre',
     description: 'Première aventure de la série de l’Écuyer.',
     access: 'free',
-    contentVersion: 60,
+    contentVersion: 62,
     stablePlayerSaves: true,
     playerRelease: true,
     demoEndNode: 'c104',

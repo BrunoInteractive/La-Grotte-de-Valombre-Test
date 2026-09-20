@@ -4,12 +4,12 @@
   "orderInSeries": 1,
   "title": "La Grotte de Valombre",
   "access": "free",
-  "contentVersion": 60,
+  "contentVersion": 62,
   "entry": "book.js",
   "assetBase": "images",
   "episode": 1,
   "slug": "la-grotte-de-valombre",
   "saveVersion": 18,
-  "buildLabel": "V68.29 — Joueurs : démo jusqu’à 104, conséquence 151",
+  "buildLabel": "V68.31 — Joueurs : continuité et récompenses corrigées, démo 104",
   "pageMapVersion": 72
 }
