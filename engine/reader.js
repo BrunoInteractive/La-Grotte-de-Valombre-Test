@@ -10,16 +10,8 @@ GameRuntime.setActiveBook(BOOK);
 const STORY = BOOK.story;
 const PAGE_BY_NODE = BOOK.pageByNode;
 const padPage = BOOK.padPage;
-// Les sauvegardes des joueurs sont identifiées par le LIVRE, et non par
-// la version du contenu publiée sur GitHub. Ne jamais changer ces clés
-// lorsqu'on ajoute des pages ou que l'on corrige une scène.
-const SAVE_ID = BOOK.stablePlayerSaves ? BOOK.id : null;
-const STORAGE_KEY = SAVE_ID
-  ? `ldveh.book.${SAVE_ID}.save`
-  : `ldveh.book.${BOOK.id}.save.v${BOOK.saveVersion || 1}`;
-const CHECKPOINT_KEY = SAVE_ID
-  ? `ldveh.book.${SAVE_ID}.checkpoint`
-  : `ldveh.book.${BOOK.id}.checkpoint.v${BOOK.saveVersion || 1}`;
+const STORAGE_KEY = BOOK.stablePlayerSaves ? `ldveh.book.${BOOK.id}.save` : `ldveh.book.${BOOK.id}.save.v${BOOK.saveVersion || 1}`;
+const CHECKPOINT_KEY = BOOK.stablePlayerSaves ? `ldveh.book.${BOOK.id}.checkpoint` : `ldveh.book.${BOOK.id}.checkpoint.v${BOOK.saveVersion || 1}`;
 const SERIES_KEY = `ldveh.series.${BOOK.seriesId}.profile.v2`;
 
 const chapterNumber = document.getElementById('chapterNumber');
@@ -78,27 +70,26 @@ let seriesProfile = loadSeriesProfile();
 function defaultState() { return BOOK.createInitialState(seriesProfile); }
 
 function migrateLegacySaveIfNeeded() {
-  // Migration non destructive des sauvegardes de la V40 : la sauvegarde
-  // d'origine n'est PAS supprimée. Une sauvegarde stable existante prime.
-  const migrateOne = (target, sources) => {
-    try {
-      if (localStorage.getItem(target)) return;
-      for (const key of sources) {
-        const raw = localStorage.getItem(key);
-        if (!raw) continue;
-        let candidate;
-        try { candidate = JSON.parse(raw); } catch { continue; }
-        if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue;
-        if (typeof candidate.node !== 'string' || !STORY[candidate.node]) continue;
-        if (!candidate.inventory || typeof candidate.inventory !== 'object') continue;
-        if (!candidate.flags || typeof candidate.flags !== 'object') continue;
-        localStorage.setItem(target, raw);
-        return;
+  try {
+    if (!localStorage.getItem(STORAGE_KEY)) {
+      for (const key of (BOOK.legacyStorageKeys || [])) {
+        const legacy = localStorage.getItem(key);
+        if (legacy) {
+          localStorage.setItem(STORAGE_KEY, legacy);
+          break;
+        }
       }
-    } catch (e) { /* Stockage bloqué : le livre reste jouable sans sauvegarde. */ }
-  };
-  migrateOne(STORAGE_KEY, BOOK.legacyStorageKeys || []);
-  migrateOne(CHECKPOINT_KEY, BOOK.legacyCheckpointKeys || []);
+    }
+    if (!localStorage.getItem(CHECKPOINT_KEY)) {
+      for (const key of (BOOK.legacyCheckpointKeys || [])) {
+        const legacy = localStorage.getItem(key);
+        if (legacy) {
+          localStorage.setItem(CHECKPOINT_KEY, legacy);
+          break;
+        }
+      }
+    }
+  } catch (e) {}
 }
 migrateLegacySaveIfNeeded();
 
@@ -107,18 +98,15 @@ function loadState() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return defaultState();
     const previous = JSON.parse(saved);
-    if (!Number.isFinite(previous.contamination)) previous.contamination=previous.flags?.blackEarthContamination ? 1 : 0;
-    if (previous.contamination>=13) {previous.flags=previous.flags||{};previous.flags.blackEarthTransformed=true;}
-    if (!previous || typeof previous !== 'object' || Array.isArray(previous)) return defaultState();
-    // Les anciens choix, inventaire, caractéristiques et états de combats
-    // sont conservés. Seuls d'éventuels champs nouvellement ajoutés prennent
-    // leur valeur par défaut.
+    if (typeof BOOK.migrateState === 'function' && previous.pageMapVersion !== (BOOK.pageMapVersion || 58)) {
+      try {
+        if (!localStorage.getItem(`${STORAGE_KEY}.backup-v68`)) localStorage.setItem(`${STORAGE_KEY}.backup-v68`, saved);
+      } catch (e) {}
+      BOOK.migrateState(previous);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(previous));
+    }
     const restored = { ...defaultState(), ...previous };
-    if (!STORY[restored.node]) restored.node = 'start';
-    if (!restored.inventory || typeof restored.inventory !== 'object') restored.inventory = {};
-    if (!restored.flags || typeof restored.flags !== 'object') restored.flags = {};
-    if (!restored.visited || typeof restored.visited !== 'object') restored.visited = {};
-    if (!Array.isArray(restored.history)) restored.history = [];
+    if (!STORY[restored.node] || (BOOK.playerRelease && /^c\d+$/.test(restored.node) && !Object.prototype.hasOwnProperty.call(PAGE_BY_NODE, restored.node))) restored.node='start';
     return restored;
   } catch { return defaultState(); }
 }
@@ -160,7 +148,17 @@ function restartFromCheckpoint() {
     const saved = localStorage.getItem(CHECKPOINT_KEY);
     if (!saved) return restartGame();
     const journalBackup = state.journal || '';
-    state = { ...defaultState(), ...JSON.parse(saved) };
+    const previous = JSON.parse(saved);
+    if (typeof BOOK.migrateState === 'function' && previous.pageMapVersion !== (BOOK.pageMapVersion || 58)) {
+      try {
+        if (!localStorage.getItem(`${CHECKPOINT_KEY}.backup-v68`)) localStorage.setItem(`${CHECKPOINT_KEY}.backup-v68`, saved);
+      } catch (e) {}
+      BOOK.migrateState(previous);
+      localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(previous));
+    }
+    state = { ...defaultState(), ...previous };
+    if (!STORY[state.node] || (BOOK.playerRelease && /^c\d+$/.test(state.node) && !Object.prototype.hasOwnProperty.call(PAGE_BY_NODE,state.node))) state.node='start';
+    if (typeof atlasMemory !== 'undefined') {atlasMemory.lastShown=''; atlasSaveMemory();}
     state.journal = journalBackup || state.journal || '';
     saveState(); closeDrawer(); closeModal(); closeAtlas(); render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -176,9 +174,7 @@ function maybeAutoCheckpoint(id) {
 
 function enterNode(id) {
   const node = STORY[id];
-  // L'histoire peut déjà contenir les futures pages en interne, mais aucune
-  // page encore non publiée ne doit être accessible dans la démo joueurs.
-  if (!node || (BOOK.playerRelease && /^c\d+$/.test(id) && !PAGE_BY_NODE[id])) return;
+  if (!node || (BOOK.playerRelease && /^c\d+$/.test(id) && !Object.prototype.hasOwnProperty.call(PAGE_BY_NODE,id))) return;
   state.node = id;
   if (!state.visited[id]) {
     state.visited[id] = true;
@@ -189,22 +185,44 @@ function enterNode(id) {
   saveState(); render(); window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+let pageImageLoadToken = 0;
 function loadPageImage(pageNumber, title) {
+  const token = ++pageImageLoadToken;
   const base = BOOK.imageBaseForPage(pageNumber);
-  imageLabel.textContent = base;
+  const candidates = typeof BOOK.imageCandidatesForPage === 'function'
+    ? BOOK.imageCandidatesForPage(pageNumber)
+    : [base];
+  imageLabel.textContent = candidates[0]?.split('/').pop() || base;
   storyImage.classList.add('hidden');
   imagePlaceholder.style.display = 'grid';
   storyImage.alt = title ? `Illustration — ${title}` : `Illustration page ${padPage(pageNumber)}`;
-  let index = 0;
   const extensions = BOOK.imageExtensions || ['webp','png','jpg','jpeg'];
+  const attempts = candidates.flatMap(candidate => extensions.map(ext => `${BOOK.assetBase}/${candidate}.${ext}`));
+  let index = 0;
   const tryNext = () => {
-    if (index >= extensions.length) {
-      storyImage.removeAttribute('src'); storyImage.classList.add('hidden'); imagePlaceholder.style.display = 'grid'; return;
+    if (token !== pageImageLoadToken) return;
+    if (index >= attempts.length) {
+      // En Travail, distinguer visuellement une illustration manquante
+      // d'une illustration que Bruno a explicitement demandé de masquer.
+      // Pour les Joueurs, conserver l'ancien comportement discret.
+      storyImage.removeAttribute('src');
+      storyImage.classList.add('hidden');
+      if (BOOK.showMissingIllustrationPlaceholder) {
+        imageFrame.classList.remove('hidden');
+        imagePlaceholder.style.display = 'grid';
+      } else {
+        imagePlaceholder.style.display = 'none';
+        imageFrame.classList.add('hidden');
+      }
+      return;
     }
-    const ext = extensions[index++];
-    storyImage.onload = () => { storyImage.classList.remove('hidden'); imagePlaceholder.style.display = 'none'; };
+    storyImage.onload = () => {
+      if (token !== pageImageLoadToken) return;
+      storyImage.classList.remove('hidden');
+      imagePlaceholder.style.display = 'none';
+    };
     storyImage.onerror = tryNext;
-    storyImage.src = `${BOOK.assetBase}/${base}.${ext}`;
+    storyImage.src = attempts[index++];
   };
   tryNext();
 }
@@ -222,7 +240,7 @@ const atlasPageAreas = new Map();
 for (const area of (ATLAS?.nodes || [])) for (const page of area.pages) atlasPageAreas.set(page, area.id);
 const atlasKnownEdges = new Set((ATLAS?.edges || []).map(([a,b]) => [a,b].sort().join('|')));
 function atlasEdgeKey(a,b) { return [a,b].sort().join('|'); }
-function atlasDefaultMemory() {return {version:1,visited:[],facts:[],edges:[],deaths:[],lastShown:''};}
+function atlasDefaultMemory() {return {version:3,pageMapVersion:71,visited:[],facts:[],edges:[],deaths:[],lastShown:''};}
 function atlasLoadMemory() {
   try {
     const saved = JSON.parse(localStorage.getItem(ATLAS_KEY));
@@ -232,6 +250,49 @@ function atlasLoadMemory() {
       initial[key] = Array.isArray(saved[key]) ? saved[key].filter(value => typeof value === 'string') : [];
     }
     initial.lastShown = typeof saved.lastShown === 'string' ? saved.lastShown : '';
+    // V62: migrate saved discovery keys and death markers along with the page numbers.
+    if (Number(saved.pageMapVersion || 0) < 62 && ATLAS?.mode === 'work') {
+      const map={c114:'c105',c115:'c106',c116:'c107',c105:'c108',c106:'c109',
+                 c107:'c110',c108:'c111',c109:'c112',c110:'c113',c111:'c114',
+                 c112:'c115',c113:'c116'};
+      const rename=id=>map[id]||id;
+      initial.facts=initial.facts.map(key=>{
+        const at=key.lastIndexOf(':');
+        return at < 0 ? key : key.slice(0,at+1)+rename(key.slice(at+1));
+      });
+      initial.deaths=initial.deaths.map(rename);
+    }
+    if (ATLAS?.mode === 'work' && Number(saved.pageMapVersion || 0) < 63) {
+      initial.facts=initial.facts.filter(key => !key.startsWith('observation:') && !key.startsWith('cahiers:'));
+      initial.lastShown='';
+    }
+    if (ATLAS?.mode === 'work' && Number(saved.pageMapVersion || 0) < 68) {
+      const renumber={c106:'c107',c107:'c108',c108:'c109'};
+      initial.facts=initial.facts.map(key=>{
+        const at=key.lastIndexOf(':');
+        if (at<0) return key;
+        const page=key.slice(at+1);
+        return key.slice(0,at+1)+(renumber[page]||page);
+      });
+      initial.deaths=initial.deaths.map(page=>renumber[page]||page);
+      initial.lastShown='';
+    }
+    if (ATLAS?.mode === 'work' && Number(saved.pageMapVersion || 0) < 69) {
+      const renumber={c117:'c111',c111:'c112',c112:'c113',c113:'c114',c114:'c115',c115:'c116',c116:'c117'};
+      initial.facts=initial.facts.map(key=>{
+        const at=key.lastIndexOf(':');
+        if (at<0) return key;
+        const page=key.slice(at+1);
+        return key.slice(0,at+1)+(renumber[page]||page);
+      });
+      initial.deaths=initial.deaths.map(page=>renumber[page]||page);
+      initial.lastShown='';
+    }
+    if (ATLAS?.mode === 'work' && Number(saved.pageMapVersion || 0) < 71) {
+      initial.facts = initial.facts.filter(key => !key.startsWith('observation:') && !key.startsWith('cahiers:'));
+      initial.lastShown = '';
+    }
+    initial.pageMapVersion=ATLAS?.mode === 'work' ? 71 : 59;
     return initial;
   } catch {return atlasDefaultMemory();}
 }
@@ -301,8 +362,8 @@ function atlasSvgPath(start,end,stroke,dash,width) {
 function atlasStub(from,to) {
   const dx=to.x-from.x,dy=to.y-from.y;
   const length=Math.hypot(dx,dy)||1;
-  const distance=Math.min(27,length*.39);
-  atlasSvgPath(from,{x:from.x+dx/length*distance,y:from.y+dy/length*distance},'#907653','6 6',3);
+  const distance=Math.min(23,length*.39);
+  atlasSvgPath(from,{x:from.x+dx/length*distance,y:from.y+dy/length*distance},'#907653','5 5',1);
 }
 function atlasShowDetails(area) {
   atlasDetails.replaceChildren();
@@ -326,8 +387,10 @@ function atlasShowDetails(area) {
 let atlasPositions = new Map();
 function atlasLayout() {
   const available=atlasScroller.clientWidth;
-  if (!available || available>620) {
-    return {width:ATLAS.width,height:ATLAS.height,positions:new Map(ATLAS.nodes.map(n=>[n.id,{x:n.x,y:n.y}]))};
+  if (!available || window.innerWidth>620) {
+    const width=Math.min(600,Math.max(280,(available||608)-8));
+    const scale=width/ATLAS.width;
+    return {width,height:ATLAS.height,positions:new Map(ATLAS.nodes.map(n=>[n.id,{x:Math.round(n.x*scale),y:n.y}]))};
   }
   const width=Math.min(400,Math.max(280,available-8));
   const rows=[];
@@ -342,7 +405,7 @@ function atlasLayout() {
     const group=row.nodes.slice().sort((a,b)=>a.x-b.x);
     const left=width/2;
     const factor=(width-80)/520;
-    const xs=group.map(node=>group.length===1 && node.x>=260 && node.x<=460
+    const xs=group.map(node=>group.length===1
       ?left : left+(node.x-340)*factor);
     for (let i=1;i<xs.length;i++) xs[i]=Math.max(xs[i],xs[i-1]+85);
     if (xs[xs.length-1]>width-42) {
@@ -375,8 +438,8 @@ function atlasDraw() {
     const first=atlasPositions.get(a),second=atlasPositions.get(b);
     if (!first || !second) return;
     const used=walked.has(atlasEdgeKey(a,b)),active=currentEdges.has(atlasEdgeKey(a,b));
-    if (used && visible(a) && visible(b)) atlasSvgPath(first,second,active?'#795632':'#a58a62','',active?5:3);
-    else if (fullyVisible) atlasSvgPath(first,second,'#baaa8b','5 7',2);
+    if (used && visible(a) && visible(b)) atlasSvgPath(first,second,active?'#795632':'#a58a62','',active?1.8:1.25);
+    else if (fullyVisible) atlasSvgPath(first,second,'#baaa8b','4 6',.9);
     else {
       if (visible(a)) atlasStub(first,second);
       if (visible(b)) atlasStub(second,first);
@@ -387,7 +450,7 @@ function atlasDraw() {
   if (ATLAS.mode === 'player' && seen.has('monde')) {
     const origin=atlasPositions.get('monde');
     for (const [dx,dy] of [[-80,55],[0,65],[80,55]]) {
-      const length=Math.hypot(dx,dy);atlasSvgPath(origin,{x:origin.x+dx/length*31,y:origin.y+dy/length*31},'#907653','6 6',3);
+      const length=Math.hypot(dx,dy);atlasSvgPath(origin,{x:origin.x+dx/length*31,y:origin.y+dy/length*31},'#907653','5 5',1);
     }
   }
   for (const area of ATLAS.nodes) {
@@ -404,7 +467,7 @@ function atlasDraw() {
     const dot=document.createElement('span');dot.className='atlas-dot';dot.setAttribute('aria-hidden','true');el.appendChild(dot);
     const label=document.createElement('span');label.className='atlas-name';label.textContent=area.label;el.appendChild(label);
     if (clickable){const clue=document.createElement('span');clue.className='atlas-clue';clue.textContent='◆';clue.setAttribute('aria-hidden','true');el.appendChild(clue);}
-    if (area.pages.some(page=>atlasMemory.deaths.includes(page))){const cross=document.createElement('span');cross.className='atlas-death';cross.textContent='×';cross.setAttribute('aria-label','Mort sur ce chemin');el.appendChild(cross);}
+    if (area.pages.some(page=>atlasMemory.deaths.includes(page))){const cross=document.createElement('span');cross.className='atlas-death';cross.textContent='☠';cross.setAttribute('aria-label','Mort sur ce chemin');el.appendChild(cross);}
     atlasPoints.appendChild(el);
   }
   const hint=document.createElement('p');hint.className='atlas-hint';
@@ -437,14 +500,16 @@ function closeAtlas() {journalPanel.classList.add('hidden');journalPanel.setAttr
 function render() {
   const node = STORY[state.node] || STORY.start;
   if (node.sheet) {
+    ++pageImageLoadToken; // annule une éventuelle image de la page précédente
     chapterNumber.textContent = 'FICHE DU HÉROS';
     imageFrame.classList.add('hidden');
   } else {
     const mappedPage = PAGE_BY_NODE[state.node];
     const declaredPage = node.number ? parseInt(String(node.number).replace(/\D/g, ''), 10) : NaN;
-    const pageNumber = mappedPage || (Number.isFinite(declaredPage) ? declaredPage : 1);
-    chapterNumber.textContent = `PAGE ${padPage(pageNumber)}`;
+    const pageNumber = Number.isInteger(mappedPage) ? mappedPage : (Number.isFinite(declaredPage) ? declaredPage : 1);
+    chapterNumber.textContent = pageNumber === 0 ? 'PROLOGUE · 000' : `PAGE ${padPage(pageNumber)}`;
     if (node.noImage) {
+      ++pageImageLoadToken;
       imageFrame.classList.add('hidden');
       storyImage.removeAttribute('src');
       storyImage.classList.add('hidden');
@@ -470,43 +535,47 @@ function render() {
   statusTags.innerHTML = '';
   if (!node.sheet) {
     const protection = BOOK.rules && typeof BOOK.rules.currentProtection === 'function' ? BOOK.rules.currentProtection(state) : 0;
-    const labels = [`♥ ${state.hp}/${state.maxHp}`, `🛡 ${protection}`, `Force ${currentForce(state)}`, `Dextérité ${currentDexterity(state)}`, `Puissance de l’arme ${state.weapon === 'none' ? 0 : combatPower(state)}`];
-    if (state.contamination>0) labels.push(`Terre noire ${state.contamination}/13`);
+    const labels = [`♥ ${state.hp}/${state.maxHp}`, `🛡 ${protection}`, `Force ${currentForce(state)}`, `Dextérité ${currentDexterity(state)}`, `Puissance de l’arme ${state.weapon === 'none' ? 0 : combatPower(state)}`, ...(state.contamination>0 ? [`Terre noire ${state.contamination}/13`] : [])];
     if (state.flags?.physicianNotesRead && state.contamination >= 9 && state.contamination < 13) labels.push(state.contamination >= 12 ? '⚠ Transformation très proche' : '⚠ Risque de transformation');
     if (state.silver > 0) labels.push(`${state.silver} argent`);
     if (state.goldCoins > 0) labels.push(`${state.goldCoins} or`);
     labels.forEach(label => { const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = label; statusTags.appendChild(tag); });
   }
 
-  const rawChoices = typeof node.choices === 'function' ? node.choices(state) : (node.choices || []);
-  const availableChoices = state.flags?.blackEarthTransformed && !node.sheet ? [{label:"Reprendre au dernier point de sauvegarde",action:"checkpoint"},{label:"Recommencer",action:"restart"}] : BOOK.playerRelease
-    ? rawChoices.filter(choice => !choice.to || !/^c\d+$/.test(choice.to) || !!PAGE_BY_NODE[choice.to])
-    : rawChoices;
-  // Une fin de démo n'est pas une fin de partie. On sauvegarde l'emplacement
-  // exact et on conserve les objets/choix ; une prochaine publication ouvre
-  // simplement les nouvelles destinations sans rejouer les pages déjà lues.
-  if (BOOK.playerRelease && rawChoices.length > 0 && availableChoices.length === 0 && state.hp > 0) {
-    storyText.insertAdjacentHTML('beforeend', '<p class="ending">FIN DE CETTE VERSION D’ESSAI</p><p>Ta progression est enregistrée. Reviens après la prochaine mise à jour : tu pourras poursuivre cette aventure avec ton personnage, ton inventaire et tes choix.</p>');
+  const rawChoices = state.flags?.blackEarthTransformed && !node.sheet ? [{label:"Reprendre au dernier point de sauvegarde",action:"checkpoint"},{label:"Recommencer depuis le début",action:"restart"}] : state.hp <= 0 && !node.sheet ? fatalChoices() : typeof node.choices === 'function' ? node.choices(state) : (node.choices || []);
+  const availableChoices = BOOK.playerRelease ? rawChoices.filter(choice => !choice.to || Object.prototype.hasOwnProperty.call(PAGE_BY_NODE,choice.to)) : rawChoices;
+  if (BOOK.playerRelease && state.node === BOOK.demoEndNode && state.hp > 0 && !state.flags?.blackEarthTransformed) {
+    storyText.insertAdjacentHTML('beforeend', '<p class="ending">FIN DE CETTE VERSION D’ESSAI</p><p>Ta progression est enregistrée. Tu pourras poursuivre cette aventure avec ton personnage, ton inventaire et tes choix dès la publication de la suite.</p>');
   }
-  if (state.flags?.blackEarthTransformed && !node.sheet) storyText.innerHTML='<p>La terre noire transforme ton corps. Tu deviens un gardien de la prison.</p><p><strong>Fin de l’aventure.</strong></p>';
+  if (state.flags?.blackEarthTransformed && !node.sheet) {
+    storyText.innerHTML = '<p>La terre noire gagne ton corps. Tes membres se déforment, et la voix du Dormeur s’éteint pour toujours. Tu es devenu l’un des gardiens de la prison.</p><p><strong>Fin de l’aventure : transformation à 13 points.</strong></p>';
+  }
   choices.innerHTML = '';
   availableChoices.forEach((choice, i) => {
     const btn = document.createElement('button');
     btn.className = 'choice-btn';
     const destinationPage = choice.stay ? null : PAGE_BY_NODE[choice.to];
-    const destination = destinationPage ? `<span class="choice-dest">Rendez-vous à la page ${padPage(destinationPage)}</span>` : '';
+    const destination = destinationPage === 0 ? '<span class="choice-dest">Lire le prologue</span>' : destinationPage ? `<span class="choice-dest">Rendez-vous à la page ${padPage(destinationPage)}</span>` : '';
     btn.innerHTML = `<span class="choice-index">${i + 1}</span><span class="choice-copy"><span>${choice.label}</span>${destination}</span>`;
     btn.addEventListener('click', () => {
       if (choice.action === 'checkpoint') return restartFromCheckpoint();
       if (choice.action === 'restart') return restartGame();
-      if (choice.action === 'damage') { rollDamage(state, choice.damageKey || state.node, choice.damageSides || 6); saveState(); render(); return; }
+      if (choice.action === 'damage') {
+        const key = choice.damageKey || state.node;
+        rollDamage(state, key, choice.damageSides || 6);
+        if (key === 'c12' && !state.flags.gaspardEarthRegistered) {
+          state.flags.gaspardEarthRegistered = true;
+          if (typeof BOOK.rules.raiseContamination === 'function') BOOK.rules.raiseContamination(state, 1);
+        }
+        saveState(); render(); return;
+      }
       if (typeof choice.effect === 'function') choice.effect(state);
       if (choice.stay) { saveState(); render(); return; }
       enterNode(choice.to);
     });
     choices.appendChild(btn);
   });
-  if (atlasSync()) Promise.resolve().then(() => openAtlas(true));
+  atlasSync();
 }
 
 function restartGame() {
@@ -550,11 +619,12 @@ function openInventory() {
 function closeModal() { modal.classList.add('hidden'); modalBackdrop.classList.add('hidden'); }
 
 function pageNavigationEntries() {
+  if (BOOK.playerRelease) return [];
   return Object.entries(PAGE_BY_NODE)
     .map(([nodeId, pageNumber]) => ({
       nodeId,
       pageNumber,
-      title: (STORY[nodeId] && STORY[nodeId].title) ? STORY[nodeId].title : `Page ${padPage(pageNumber)}`
+      title: BOOK.navigationTitles?.[nodeId] || STORY[nodeId]?.title || `Page ${padPage(pageNumber)}`
     }))
     .sort((a, b) => a.pageNumber - b.pageNumber);
 }
@@ -576,7 +646,8 @@ function renderPageNavigation() {
 }
 
 function jumpToPageForTest(nodeId) {
-  if (!STORY[nodeId] || !PAGE_BY_NODE[nodeId]) return;
+  if (BOOK.playerRelease) return;
+  if (!STORY[nodeId] || !Number.isInteger(PAGE_BY_NODE[nodeId])) return;
   // Outil de test : on change uniquement la page courante.
   // Aucun effet de choix/onEnter/checkpoint antérieur n'est déclenché automatiquement.
   state.node = nodeId;

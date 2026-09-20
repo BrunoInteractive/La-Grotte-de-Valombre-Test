@@ -1266,6 +1266,35 @@ button { font: inherit; }
   .hero-choice-grid { grid-template-columns: 1fr; }
   .character-modal-portrait { height: 210px; }
 }
+
+/* V66 — Carte dans un panneau centré, dimensionné à son contenu. */
+.atlas-panel {
+  position:fixed; inset:0; z-index:90; display:flex; align-items:center;
+  justify-content:center; padding:18px; background:rgba(15,12,10,.97);
+}
+.atlas-sheet {
+  display:flex; flex-direction:column; overflow:hidden;
+  width:min(100%,620px); height:min(800px,calc(100dvh - 36px));
+  max-height:calc(100dvh - 36px); min-height:0;
+  background:#e9ddbf; border:1px solid #866c47;
+  box-shadow:0 18px 60px rgba(0,0,0,.48);
+}
+.atlas-scroller { flex:1; min-height:0; overflow:auto; }
+.atlas-canvas { margin-inline:auto; }
+.atlas-location .atlas-name { font-weight:700; }
+.atlas-location .atlas-death {
+  font-family:Georgia,'Times New Roman',serif;
+  font-size:18px; line-height:1; top:-8px;
+  left:calc(50% + 9px); color:#7b3024; font-weight:700;
+  text-shadow:0 1px #f6e2bd;
+}
+@media (max-width:620px) {
+  .atlas-panel { padding:6px; }
+  .atlas-sheet { width:100%; height:calc(100dvh - 12px); max-height:calc(100dvh - 12px); }
+  .atlas-location .atlas-name { font-size:10px; line-height:1.08; font-weight:700; }
+  .atlas-location .atlas-death { font-size:15px; top:-6px; left:calc(50% + 7px); }
+}
+
 </style>
 </head>
 <body>
@@ -1305,15 +1334,17 @@ button { font: inherit; }
 
 
   <section id="journalPanel" class="atlas-panel hidden" role="dialog" aria-modal="true" aria-labelledby="atlasTitle" aria-hidden="true">
+    <div class="atlas-sheet">
     <header class="atlas-head">
-      <div><div class="atlas-kicker">LA GROTTE DE VALOMBRE · CARTE V62.1</div><h3 id="atlasTitle">Carte de l’aventure</h3></div>
+      <div><div class="atlas-kicker">LA GROTTE DE VALOMBRE · CARTE V68.24 · Joueurs</div><h3 id="atlasTitle">Carte de l’aventure</h3></div>
       <button id="journalCloseBtn" class="atlas-close" type="button" aria-label="Fermer la carte">×</button>
     </header>
-    <div class="atlas-legend" id="atlasLegend">● Parcours · ┄ Chemin non emprunté · × Mort · ◆ Indice</div>
+    <div class="atlas-legend" id="atlasLegend">● Parcours · ┄ Chemin non emprunté · ☠ Mort · ◆ Indice</div>
     <div id="atlasScroller" class="atlas-scroller" tabindex="0" aria-label="Explorer la carte">
       <div id="atlasCanvas" class="atlas-canvas"><svg id="atlasLines" class="atlas-lines" aria-hidden="true"></svg><div id="atlasPoints"></div></div>
     </div>
     <div id="atlasDetails" class="atlas-details" aria-live="polite"><p>Choisis un rond marqué ◆ pour consulter les découvertes.</p></div>
+    </div>
   </section>
 
   <div id="drawerBackdrop" class="backdrop hidden"></div>
@@ -1332,8 +1363,8 @@ button { font: inherit; }
 
   <script src="./engine/core.js"></script>
   <script src="./app/catalog.js"></script>
-  <script src="./books/ecuyer/01-la-grotte-de-valombre/book.js"></script>
-  <script src="./books/ecuyer/01-la-grotte-de-valombre/map.js?v=62.1"></script>
-  <script src="./engine/reader.js?v=62.1"></script>
+  <script src="./books/ecuyer/01-la-grotte-de-valombre/book.js?v=6824"></script>
+  <script src="./books/ecuyer/01-la-grotte-de-valombre/map.js?v=6824"></script>
+  <script src="./engine/reader.js?v=6824"></script>
 </body>
 </html>

@@ -28,6 +28,18 @@ const ENEMIES = {
     maxHp: 12,
     force: 18,
     dexterity: 5
+  },
+  observationPrisoner: {
+    name: 'CHEVALIER TRANSFORMÉ',
+    maxHp: 8,
+    force: 8,
+    dexterity: 9
+  },
+  observationPrisonerCorridor: {
+    name: 'CHEVALIER ENRAGÉ',
+    maxHp: 8,
+    force: 12,
+    dexterity: 9
   }
 };
 
@@ -55,10 +67,25 @@ function forceDamageBonus(force) {
   return Math.max(1, Math.floor(Math.max(0, Number(force) || 0) / 4));
 }
 
+// Le bouclier encaisse avant les pièces d'armure déjà portées.
 const PROTECTION_ITEMS = {
+  bouclier_chevalier: { max: 6, name: 'Bouclier du chevalier' },
   casque_cabosse: { max: 2, name: 'Casque cabossé' },
   gantelet_veilleur: { max: 1, name: 'Gantelet de Veilleur' }
 };
+
+function shieldIsActive(state) {
+  ensureProtectionState(state);
+  return hasItem(state, 'bouclier_chevalier') &&
+    Number(state.protectionItems.bouclier_chevalier?.remaining || 0) > 0;
+}
+
+function addKnightShield(state) {
+  addProtectiveItem(state, 'bouclier_chevalier', 'Bouclier du chevalier',
+    'Petit bouclier de métal : absorbe 6 dégâts au total. Dextérité −1 tant qu’il protège. Une fois brisé, il devient inutilisable et le malus disparaît.', 6);
+  if (!state.flags || typeof state.flags !== 'object') state.flags = {};
+  state.flags.knightShieldTaken = true;
+}
 
 function ensureProtectionState(state) {
   if (!state.protectionItems || typeof state.protectionItems !== 'object') state.protectionItems = {};
@@ -134,6 +161,15 @@ function applyDamage(state, amount) {
   return result;
 }
 
+function lakeTentacleDamageHtml(state, key) {
+  if (!hasDamageRoll(state, key)) return '';
+  const result = state.damageRollResults && state.damageRollResults[key];
+  const broken = result && Array.isArray(result.destroyedProtection)
+    ? result.destroyedProtection.map(name => `<p><strong>${name} est désormais trop endommagé pour te protéger.</strong> Tu le conserves dans ton inventaire, mais il est inutilisable.</p>`).join('')
+    : '';
+  return damageResultHtml(state, key) + broken;
+}
+
 function damageAbsorptionHtml(result) {
   if (!result) return '';
   let html = '';
@@ -150,12 +186,6 @@ function damageAbsorptionHtml(result) {
   return html;
 }
 
-function contaminationLevel(state) { return Math.max(0,Math.min(13,Math.floor(Number(state.contamination)||0))); }
-function raiseContamination(state, amount=1) {
- state.flags=state.flags||{};state.contamination=Math.min(13,contaminationLevel(state)+Math.max(0,amount));
- state.flags.blackEarthContamination=state.contamination>0;
- if(state.contamination>=13)state.flags.blackEarthTransformed=true;
-}
 function fightRound(state, key, enemy) {
   const combat = combatState(state, key, enemy);
   const heroDice = roll2D6();
@@ -186,7 +216,7 @@ function fightRound(state, key, enemy) {
     outcome = 'enemy';
     damage = enemyDamage;
     const resolution = applyDamage(state, damage);
-    if (resolution.hpLost>0 && !combat.contaminated) {raiseContamination(state,1);combat.contaminated=true;}
+    if (resolution.hpLost > 0 && !combat.contaminated) { raiseContamination(state, 1); combat.contaminated = true; }
     protectionAbsorbed = resolution.absorbed;
     hpLost = resolution.hpLost;
     protectionBefore = resolution.protectionBefore;
@@ -251,6 +281,7 @@ function throwingBladeResultHtml(state, key, enemy) {
     </div>`;
 }
 
+const BLADE_RESULT_PAGES = { observationPrisonerCorridor:'c150', shadowMass:'c122', rochebrumeMissing:'c123', isletCrawler:'c124', bridgeWalker:'c125', observationPrisoner:'c126' };
 function combatActionChoices(state, key, enemy, pageId, rollLabel = null) {
   const combat = combatState(state, key, enemy);
   if (combat.hp <= 0 || state.hp <= 0) return [];
@@ -263,7 +294,7 @@ function combatActionChoices(state, key, enemy, pageId, rollLabel = null) {
     const qty = state.throwingBlades || 0;
     list.push({
       label: `Lancer une lame de jet — ${qty} restante${qty > 1 ? 's' : ''} (2 dégâts)`,
-      to: pageId,
+      to: BLADE_RESULT_PAGES[key],
       effect: s => throwBladeAtEnemy(s, key, enemy)
     });
   }
@@ -329,6 +360,149 @@ function combatRoundHtml(state, key, enemy) {
       <div class="combat-outcome">${outcomeText}</div>
       <div class="combat-life-line">Ta Vie : <strong>${state.hp} / ${state.maxHp}</strong> · Protection : <strong>${currentProtection(state)}</strong> · Vie adverse : <strong>${combat.hp} / ${enemy.maxHp}</strong></div>
     </div>`;
+}
+
+// Les défenses de la prison sont liées : la terre noire isole de l'appel,
+// mais sa progression expose à la transformation. Pas de mort automatique au plafond
+// tant que la suite du livre et son traitement définitif ne sont pas publiés.
+function contaminationLevel(state) {
+  return Math.max(0, Math.min(13, Number.isFinite(state.contamination) ? Math.floor(state.contamination) : (state.flags?.blackEarthContamination ? 2 : 0)));
+}
+function raiseContamination(state, amount = 1) {
+  state.contamination = Math.min(13, contaminationLevel(state) + Math.max(0, amount));
+  if (state.contamination >= 13) state.flags.blackEarthTransformed = true;
+  state.flags.blackEarthContamination = state.contamination > 0;
+}
+// Le coffre derrière la grille est une prise de risque volontaire.
+// Une seule exposition par partie, même si l’on revient lire les parchemins.
+function exposeTabletGate(state) {
+  if (!state.flags || typeof state.flags !== 'object') state.flags = {};
+  // Une ancienne sauvegarde ayant déjà employé les gants ne reçoit pas une seconde exposition.
+  if (state.flags.tabletsDustExposure || state.flags.tabletsGlovesUsed) return;
+  state.flags.tabletsDustExposure = true;
+  state.flags.tabletsExamined = true;
+  raiseContamination(state, 2);
+}
+function blackEarthTreatment(state) {
+  if (!hasItem(state, 'ampoule_blanche')) return;
+  removeItem(state, 'ampoule_blanche');
+  // L'injection est une modification indépendante des anciennes blessures.
+  if (state.flags.labInjected) state.flags.labInjected = false;
+  if ((state.dexPenalty || 0) > 0) state.dexPenalty -= 1;
+  state.contamination = Math.max(0, contaminationLevel(state) - 4);
+  state.flags.blackEarthContamination = state.contamination > 0;
+  state.flags.usedWhiteAmpoule = true;
+}
+function injectBlackEarth(state) {
+  if (state.flags.labInjected) return;
+  state.flags.labInjected = true;
+  raiseContamination(state, 2);
+}
+// V68 : la contamination module ce qui est entendu, jamais un jet de résistance.
+// Une décision du joueur n'est pas forcée par ce niveau.
+function dormantPerception(state, location) {
+  const earth = contaminationLevel(state);
+  if (location === 'avenue') {
+    if (earth <= 4) return `<p>Brutalement, un murmure te parvient. Tu ne sais pas s’il vient du fond de l’avenue ou s’il résonne directement dans ta tête.</p>
+      <blockquote>« Libère-moi…<br>Les esprits… ceux qui errent dans la vallée… je pourrai les apaiser…<br>Celui que tu cherches… je peux te conduire… jusqu’à lui… »</blockquote>
+      <p>Le murmure s’éteint.</p>`;
+    if (earth <= 8) return `<p>Un murmure surgit sans que tu puisses en situer l’origine.</p>
+      <blockquote>« Libère… les esprits… apaiser… celui que tu cherches… »</blockquote>
+      <p>Sur une borne, l’œil fermé est accompagné d’une mise en garde : « NE PAS OUVRIR LA PRISON. » Le murmure s’interrompt.</p>`;
+    return `<p>Aucune voix ne t'accompagne. Sur les bornes de pierre, les Veilleurs ont gravé l'œil fermé et cette mise en garde : « NE PAS OUVRIR LA PRISON. »</p>`;
+  }
+  if (location === 'service') {
+    if (earth <= 4) return `<p>La présence revient tandis que tu progresses sous les étais.</p>
+      <blockquote>« Ils avaient peur de moi. Ils m'ont laissé seul ici. Laisse-moi sortir. »</blockquote>
+      <p>Une flèche gravée par les Veilleurs indique pourtant une autre direction : le passage de service.</p>`;
+    if (earth <= 8) return `<p>Tu perçois une phrase incomplète : « Ils m'ont laissé… » Puis le silence revient. Sur la paroi, une inscription des Veilleurs avertit : « SA PAROLE N'EST PAS UN ORDRE. »</p>`;
+    return `<p>Sur la paroi, une inscription des Veilleurs avertit : « SA PAROLE N'EST PAS UN ORDRE. » Le couloir demeure silencieux.</p>`;
+  }
+  return '';
+}
+function equipVeilleurCollar(state) {
+  if (state.flags.collarEquipped || state.flags.collarTorn) return;
+  state.flags.collarEquipped = true;
+  state.maxHp += 3;
+  state.hp += 3;
+  raiseContamination(state, 1); // La poudre entre sous la peau lors de la fixation.
+  addItem(state, 'collier_vitalite', 'Collier de vitalité', 'Incrusté dans la peau : +3 Vie maximale et actuelle, −1 Dextérité, +1 contamination à la pose. L’arracher retire les 3 points supplémentaires et cause 1 blessure.');
+}
+const SENTINELS = { maxHp: 4, dexterity: 8, force: 4, name: 'SENTINELLE NOIRE' };
+function ensureSentinels(state) {
+  if (!state.sentinelFight || !Array.isArray(state.sentinelFight.hp))
+    state.sentinelFight = { hp: [4, 4], round: 0, last: null };
+  return state.sentinelFight;
+}
+function sentinelCardsHtml(state) {
+  const f = ensureSentinels(state);
+  return `<div class="enemy-card"><div class="enemy-card-title">DEUX SENTINELLES NOIRES</div><div class="enemy-card-stats"><div><span>Sentinelle 1</span><strong>${f.hp[0]}/4 Vie</strong></div><div><span>Sentinelle 2</span><strong>${f.hp[1]}/4 Vie</strong></div><div><span>Dextérité</span><strong>8 chacune</strong></div><div><span>Dégâts</span><strong>1 chacune</strong></div></div></div>`;
+}
+function sentinelRound(state, target, blade) {
+  state.flags.sentinelResultAcknowledged = false;
+  const f = ensureSentinels(state);
+  if (state.hp <= 0 || f.hp.every(h => h <= 0) || f.hp[target] <= 0) return;
+  if (blade && (state.throwingBlades || 0) <= 0) return;
+  const heroDice = roll2D6();
+  const heroScore = currentDexterity(state) + heroDice[0] + heroDice[1];
+  const report = [];
+  let originalTargetDamage = 0;
+  if (blade) {
+    state.throwingBlades -= 1;
+    syncThrowingBlades(state);
+    originalTargetDamage = Math.min(2, f.hp[target]);
+    f.hp[target] -= originalTargetDamage;
+    report.push(`Ta lame touche la sentinelle ${target+1} : ${originalTargetDamage} dégâts.`);
+  } else {
+    const enemyDice = roll2D6();
+    const enemyScore = SENTINELS.dexterity + enemyDice[0] + enemyDice[1];
+    if (heroScore > enemyScore) {
+      originalTargetDamage = Math.min(f.hp[target], forceDamageBonus(currentForce(state)) + (state.weapon === 'none' ? 0 : combatPower(state)));
+      f.hp[target] -= originalTargetDamage;
+      report.push(`Tu touches la sentinelle ${target+1} : ${originalTargetDamage} dégâts.`);
+    } else if (heroScore < enemyScore) {
+      const result = applyDamage(state, 1);
+      if (result.hpLost > 0 && !f.contaminated) { raiseContamination(state, 1); f.contaminated = true; }
+      report.push(`La sentinelle ${target+1} te touche : ${result.absorbed} absorbé, ${result.hpLost} Vie perdue.`);
+    } else report.push(`Tu pares la sentinelle ${target+1} : égalité, aucun dégât.`);
+  }
+  // Chaque autre sentinelle encore vivante attaque indépendamment. Une lame
+  // lancée laisse aussi la sentinelle visée attaquer si elle a survécu.
+  for (let i = 0; i < 2; i++) {
+    if (f.hp[i] <= 0 || (!blade && i === target) || state.hp <= 0) continue;
+    const enemyDice = roll2D6();
+    const enemyScore = SENTINELS.dexterity + enemyDice[0] + enemyDice[1];
+    if (enemyScore > heroScore) {
+      const result = applyDamage(state, 1);
+      if (result.hpLost > 0 && !f.contaminated) { raiseContamination(state, 1); f.contaminated = true; }
+      report.push(`La sentinelle ${i+1} t'attaque : ${result.absorbed} absorbé, ${result.hpLost} Vie perdue.`);
+    } else report.push(`Tu évites l'attaque de la sentinelle ${i+1}.`);
+  }
+  f.round++;
+  f.last = { heroDice, heroScore, report, target, blade, hp: [...f.hp], heroHp: state.hp };
+}
+function sentinelChoices(state) {
+  const f = ensureSentinels(state);
+  if (state.hp <= 0) return fatalChoices();
+  if (f.hp.every(h => h <= 0)) return [{ label: 'Fouiller l’armurerie', to: 'c81' }];
+  const choices = [];
+  f.hp.forEach((hp, i) => {
+    if (hp <= 0) return;
+    choices.push({ label: `Attaquer la sentinelle ${i+1} à l’épée (${hp} Vie)`, to: i === 0 ? 'c132' : 'c134', effect: s => sentinelRound(s, i, false) });
+    if ((state.throwingBlades || 0) > 0) choices.push({ label: `Lancer une lame sur la sentinelle ${i+1} (${state.throwingBlades} restantes)`, to: i === 0 ? 'c133' : 'c135', effect: s => sentinelRound(s, i, true) });
+  });
+  return choices;
+}
+function sentinelResultChoices(state) {
+  const fight = ensureSentinels(state);
+  if (state.hp <= 0) return fatalChoices();
+  if (fight.hp.every(h => h <= 0)) return [{label:'Rejoindre l’armurerie',to:'c81'}];
+  return [{label:'Poursuivre le combat',to:'c80'}];
+}
+function sentinelResultHtml(state) {
+  const f = ensureSentinels(state);
+  if (!f.last) return '';
+  return `<div class="combat-roll-result"><div class="combat-roll-title">Échange n° ${f.round}</div><p>Ton jet : ${f.last.heroDice.join(' + ')} · Attaque : ${f.last.heroScore}</p>${f.last.report.map(r=>`<p>${r}</p>`).join('')}<p><strong>Ta Vie : ${state.hp}/${state.maxHp}. Terre noire : ${contaminationLevel(state)}/13.</strong></p></div>`;
 }
 
 function heroGender(state) {
@@ -406,6 +580,7 @@ const STORY = {
           <div class="hero-stat"><strong>Protection</strong><span>${currentProtection(state)}</span></div>
           <div class="hero-stat"><strong>Force</strong><span>${currentForce(state)}</span></div>
           <div class="hero-stat"><strong>Dextérité</strong><span>${currentDexterity(state)}</span></div>
+          ${contaminationLevel(state)>0 ? `<div class="hero-stat"><strong>Terre noire</strong><span>${contaminationLevel(state)}/13 · ${state.flags.physicianNotesRead ? contaminationLevel(state)>=9 ? "Danger" : contaminationLevel(state)>=5 ? "Équilibre précaire" : "Appel puissant" : "Effets inconnus"}</span></div>` : ""}
           <div class="hero-stat hero-stat-wide"><strong>Puissance de l’arme</strong><span>${state.weapon === 'none' ? 0 : combatPower(state)}</span></div>
         </div>
 
@@ -414,6 +589,7 @@ const STORY = {
           <p><strong>Vie :</strong> indique la santé du personnage. Lorsqu’elle atteint zéro, c’est la fin de votre aventure.</p>
           <p><strong>Protection :</strong> provient de certaines pièces d’équipement. Elle absorbe les dégâts avant la Vie et diminue lorsqu’elle encaisse un choc.</p>
           <p><strong>Force :</strong> représente sa puissance physique. Elle contribue aux dégâts infligés et permet de forcer, retenir ou briser ce qui barre la route.</p>
+          ${state.flags.physicianNotesRead ? "<p><strong>Terre noire :</strong> 0–4 : appel puissant ; 5–8 : équilibre précaire ; 9–12 : transformation imminente ; 13 : transformation définitive.</p>" : ""}
           <p><strong>Dextérité :</strong> représente son aisance et ses réflexes. Elle permet de prendre l’avantage au combat, mais aussi d’éviter pièges, chutes et autres dangers. Elle peut être affectée par ce qui est porté, par exemple une arme lourde.</p>
           <p><strong>Puissance de l’arme :</strong> valeur propre à l’arme équipée. Elle s’ajoute au bonus de Force lorsque le personnage remporte un échange.</p>
         </div>
@@ -429,32 +605,47 @@ const STORY = {
           <p>En bas de l’écran, tu peux consulter à tout moment ta fiche perso et ton inventaire. Tu y retrouveras tes caractéristiques, ton équipement et les objets découverts pendant l’aventure.</p>
         </div>
       </div>
-      <p>Sir Aldren t’a ordonné de rester au village. Pourtant, il aurait déjà dû être revenu, et son cheval vient de rentrer seul.</p>
     `,
-    choices: [{ label: 'Commencer l’aventure', to: 'c1', effect: s => setHeroIdentity(s, heroGender(s)) }]
+    choices: [{ label: 'Commencer l’aventure', to: 'c0', effect: s => setHeroIdentity(s, heroGender(s)) }]
   },
+  c0: {
+    number: 'PAGE 000',
+    title: 'Valombre',
+    image: 'Le village oublié',
+    text: state => `
+      <p>Tu as toujours connu Valombre ainsi.</p>
+      <p>Des maisons aux murs lézardés, des champs qui donnent juste assez pour passer l’hiver et des habitants qui comptent leurs pièces avant d’entrer chez le marchand.</p>
+      <p>Les anciens assurent qu’il n’en a pas toujours été ainsi. Ils racontent qu’autrefois, Valombre prospérait. Ses artisans travaillaient pour les seigneurs des environs. Des marchands parcouraient ses routes et son nom était connu, admiré ou craint, bien au-delà de la vallée.</p>
+      <p>Personne ne sait vraiment ce qui a changé. Les routes commerciales ont été abandonnées. Les familles les plus riches sont parties. Avec les générations, les récits de grandeur sont devenus des histoires qu’on raconte au coin du feu.</p>
+      <p>Toi, tu n’as jamais connu cette époque. Depuis l’enfance, tu rêves de quitter Valombre, de parcourir le royaume et de découvrir ce qui existe au-delà de ces terres oubliées.</p>
+      <p>La chevalerie t’a toujours semblé être le seul chemin possible.</p>
+      <p>Lorsque Sir Aldren de Rochebrune t’a pris à son service comme ${heroGender(state) === 'male' ? 'écuyer' : 'écuyère'}, tu as cru tenir enfin ta chance. Tu as entretenu ses armes, soigné son cheval et appris tout ce que tu pouvais auprès de lui.</p>
+      <p>Puis Aldren est parti seul vers la grotte qui domine la vallée. Il disait vouloir affronter une créature dont on parlait au village. Il t’a ordonné de rester.</p>
+      <p>Trois jours ont passé.</p>
+      <p>Ce matin, des sabots résonnent soudain au bout de la rue.</p>
+    `,
+    choices: [{ label: 'Rejoindre les écuries', to: 'c1' }]
+  },
+
   c1: {
     number: 'PAGE 1',
     title: 'Les écuries de Valombre',
     image: 'Le cheval revenu seul',
     onEnter: s => equipHeavySword(s),
     text: state => `
-      <p>Des sabots résonnent soudain sur les pavés de Valombre.</p>
-      <p>Le cheval de <strong>Sir Aldren de Rochebrune</strong> apparaît au bout de la rue. Seul.</p>
-      <p>De l’écume couvre son poitrail. Une longue entaille traverse la selle et du sang séché macule l’une des sacoches.</p>
-
-      <p>Ton regard se pose alors sur l’ancienne épée de Sir Aldren, appuyée contre le mur de l’écurie.</p>
-      <p>Tu l’as vu la manier des centaines de fois.</p>
-      <p>Pourtant, lorsque tes doigts se referment sur sa poignée, tu ressens quelque chose d’étrange.</p>
-      <p>Un mélange de <strong>crainte et de fierté</strong>.</p>
-      <p>Jusqu’à aujourd’hui, cette arme appartenait à ton maître. La prendre donne soudain à son absence une réalité que tu aurais préféré repousser encore un peu.</p>
-      <p>Tu soulèves la lame.</p>
-      <p>Elle est lourde. Beaucoup plus lourde que les armes avec lesquelles Aldren t’a appris à combattre.</p>
-      <p>Mais lorsque tu la tiens devant toi, tu sens également sa puissance.</p>
-      <p>Ce n’est pas une arme faite pour être rapide.</p>
-      <p>C’est une arme faite pour <strong>frapper fort</strong>.</p>
-      <p>Tu la passes à ton côté.</p>
-      <p>Si Sir Aldren est encore vivant quelque part dans cette montagne, tu comptes bien le retrouver.</p>
+      <p>Le cheval de <strong>Sir Aldren de Rochebrune</strong> apparaît au bout de la rue.</p>
+      <p>Seul.</p>
+      <p>De l’écume couvre son poitrail. La selle est entaillée. Du sang séché macule une sacoche.</p>
+      <p>Aldren a disparu.</p>
+      <p>Tu ne vas pas rester ici à attendre son retour.</p>
+      <p>Contre le mur de l’écurie repose son ancienne épée.</p>
+      <p>Tu l’as entretenue des centaines de fois. Aujourd’hui, tu la prends.</p>
+      <p>Elle est lourde. Tu la soulèves à deux mains, puis la passes à ton côté.</p>
+      <p>Tu regardes le chemin qui mène hors du village.</p>
+      <p>Depuis l’enfance, tu rêves de partir. De découvrir le monde. De vivre autre chose que cette vie à Valombre.</p>
+      <p>Cette fois, tu as une raison de le faire.</p>
+      <p><strong>Tu vas retrouver Aldren.</strong></p>
+      <p>Et rien ne te fera rester au village.</p>
     `,
     choices: [
       { label: 'Fouiller la sacoche de Sir Aldren', to: 'c2' },
@@ -485,17 +676,15 @@ const STORY = {
       <p>Tu le déplies. Ce n’est pas vraiment un message. Plutôt des notes jetées à la hâte, comme pour fixer des idées avant de les oublier.</p>
 
       <div class="parchment-verse">
-        <em>ne pas ouvrir l’œil</em><br><br>
-        <strong>soufre !!!</strong><br>
-        <small>Le mot « soufre » est entouré plusieurs fois, avec plusieurs traits nerveux et des points d’exclamation.</small><br><br>
-        <em>lame noire</em><br><br>
-        <em>derrière la paroi</em><br>
-        <em>terre noire</em><br>
-        <em>ne pas écouter</em><br>
-        <em>surtout ne pas—</em>
+        <strong>IL FAUT OUVRIR L’ŒIL FERMÉ</strong><br><br>
+        <em>La lame noire. Trouver la lame noire.</em><br><br>
+        <s>La terre noire…</s><br>
+        <small>Ces mots sont barrés trois fois. Dans la marge, Aldren a ajouté : « ÉVITER ».</small><br><br>
+        <strong>SOUFRE !!! ☠</strong><br>
+        <small>Le mot est entouré trois fois de traits nerveux. Une tête de mort est dessinée à côté.</small>
       </div>
 
-      <p>La dernière ligne s’interrompt dans une traînée d’encre. Tu relis la feuille sans mieux comprendre.</p>
+      <p>Les premières lignes ont été écrites avec une insistance presque fébrile. Les avertissements, eux, ne laissent guère de doute : Aldren voulait éviter la terre noire et le soufre.</p><p>Mais pourquoi voulait-il ouvrir cet œil fermé ?</p>
       <p>Tu replies soigneusement les notes et les ranges dans ton inventaire. Tu pourras les relire quand tu le souhaites.</p>
       ${hasItem(state,'fiole_rouge') || state.flags.fioleLaissee
         ? '<p>Tu as déjà décidé quoi faire de la mystérieuse fiole rouge.</p>'
@@ -504,8 +693,8 @@ const STORY = {
     choices: state => {
       if (!hasItem(state,'fiole_rouge') && !state.flags.fioleLaissee) {
         return [
-          { label: 'Prendre la fiole et aller au village', to: 'c3', effect: s => { addItem(s,'fiole_rouge','Fiole rouge','Une petite fiole au liquide rouge sombre. Son utilité est encore inconnue.'); } },
-          { label: 'Prendre la fiole et partir vers les grottes', to: 'c8', effect: s => { addItem(s,'fiole_rouge','Fiole rouge','Une petite fiole au liquide rouge sombre. Son utilité est encore inconnue.'); } },
+          { label: 'Prendre la fiole et aller au village', to: 'c118', effect: s => { addItem(s,'fiole_rouge','Fiole rouge','Une petite fiole au liquide rouge sombre. Son utilité est encore inconnue.'); } },
+          { label: 'Prendre la fiole et partir vers les grottes', to: 'c119', effect: s => { addItem(s,'fiole_rouge','Fiole rouge','Une petite fiole au liquide rouge sombre. Son utilité est encore inconnue.'); } },
           { label: 'Laisser la fiole et aller au village', to: 'c3', effect: s => { s.flags.fioleLaissee = true; } },
           { label: 'Laisser la fiole et partir vers les grottes', to: 'c8', effect: s => { s.flags.fioleLaissee = true; } }
         ];
@@ -578,7 +767,7 @@ const STORY = {
         return [
           {
             label: 'Acheter la potion de guérison',
-            to: 'c3',
+            to: 'c120',
             effect: s => {
               s.silver -= 3;
               addItem(
@@ -635,7 +824,7 @@ const STORY = {
       return [
         {
           label: 'Accepter l’échange',
-          to: 'c3',
+          to: 'c121',
           effect: s => { s.weapon = 'light'; }
         },
         {
@@ -979,7 +1168,7 @@ const STORY = {
           s,
           'potion_sombre',
           'Fiole rouge sombre',
-          'Restaure 3 Vie, mais ajoute 2 points de terre noire.'
+          'Une fiole trouvée sur Gaspard. Elle restaure 3 Vie mais ajoute 2 points de terre noire.'
         );
       }
     },
@@ -1413,6 +1602,7 @@ const STORY = {
       <p>L’un <strong>descend</strong> dans l’obscurité, et de ce passage monte une <strong>forte odeur de soufre</strong>.</p>
 
       <p>L’autre continue tout droit et semble s’enfoncer dans un passage beaucoup plus étroit.</p>
+      ${hasItem(state, 'parchemin') ? '<p>Tu repenses aux avertissements d’Aldren : <strong>éviter le soufre</strong>.</p>' : ''}
 
     `,
     choices: [
@@ -2318,18 +2508,15 @@ const STORY = {
 
       <p>À droite, une corniche étroite rejoint un pont suspendu au-dessus d’un gouffre sans fond visible.</p>
 
-      <p>Tu ne pourras pas explorer les trois.</p>
+      <p>Tu éprouves le besoin de continuer, de t’enfoncer plus profondément. Cette envie te surprend : tu étais venu pour retrouver Aldren, pas pour obéir à une direction que tu ne comprends pas.</p><p>Tu ne pourras pas explorer les trois.</p>
 
       <p>Il faut choisir.</p>
 
     `,
-    // Les choix sont automatiquement masqués par le lecteur tant que les
-    // pages 41, 44 et 55 ne font pas partie de PAGE_ORDER. Ils apparaîtront
-    // à la prochaine publication, sans modifier cette page ni la sauvegarde.
     choices: [
       { label: 'Descendre vers le lac noir', to: 'c41' },
       { label: 'Prendre l’escalier de pierre', to: 'c44' },
-      { label: 'Longer la corniche vers le pont', to: 'c55' }
+      { label: 'Longer la corniche vers le pont', to: 'c58' }
     ]
   },
 
@@ -2381,77 +2568,78 @@ const STORY = {
 
       <p>Il n’y a plus que l’eau.</p>
 
-      <p>Alors un coup sec résonne.</p>
+      <p>Alors un coup sec résonne contre le bois, sous tes pieds.</p>
 
       <p><strong>TOC.</strong></p>
 
-      <p>Tu lèves les yeux. Il t’a semblé venir de très haut, peut-être du pont aperçu depuis la rive.</p>
+      <p>Tu immobilises les rames.</p>
 
-      <p>Un second coup répond, plus proche.</p>
-
-      <p><strong>TOC.</strong></p>
-
-      <p>Puis un troisième frappe directement sous la coque.</p>
+      <p>Un second coup frappe le flanc de la barque.</p>
 
       <p><strong>TOC.</strong></p>
 
-      <p>Le même rythme exact que les trois notes entendues dans la forêt de Rochebrume.</p>
+      <p>Puis un troisième, juste sous le bord où repose ta main.</p>
+
+      <p><strong>TOC.</strong></p>
     `,
     choices: [
       { label: 'Te pencher et regarder sous l’eau', to: 'c42' },
-      { label: 'Ne surtout pas regarder et recommencer à ramer', to: 'c45' }
+      {
+        label: 'Ne pas regarder et recommencer à ramer',
+        to: 'c45',
+        effect: s => {
+          s.flags.lakeTentacleOutcome = 'surprised';
+          rollDamage(s, 'lakeTentacleSurprised', 3);
+          /* Tentacule : choc physique, aucune contamination. */
+        }
+      }
     ]
   },
 
   c42: {
     number: 'PAGE 42',
     title: '',
-    image: 'Un visage sous l’eau',
+    image: 'Les lueurs sous le lac',
     onEnter: s => { s.flags.lookedIntoLake = true; },
-    text: `
-      <p>Tu poses les rames et te penches lentement au-dessus du bord.</p>
+    text: state => `
+      <p>Tu poses les rames et te penches au-dessus du bord.</p>
 
-      <p>La surface est si sombre qu’elle ressemble davantage à une ouverture qu’à de l’eau.</p>
+      <p>L’eau est si noire que tu ne distingues d’abord rien sous la surface.</p>
 
-      <p>Puis des points lumineux apparaissent très loin sous toi.</p>
+      <p>Puis quelques lueurs apparaissent, très loin en dessous.</p>
 
-      <p>Des dizaines.</p>
+      <p>Entre elles, tu devines des formes pâles. Une ligne droite. Plus loin, ce qui pourrait être une arche.</p>
 
-      <p>Des centaines.</p>
+      <p>Tu essaies de mieux voir.</p>
 
-      <p>Ils ressemblent à des étoiles dans un ciel nocturne.</p>
+      <p>Un nouveau coup résonne contre la coque.</p>
 
-      <p>Mais elles sont sous le bateau.</p>
+      <p>Cette fois, tu aperçois quelque chose juste sous la surface.</p>
 
-      <p>Et beaucoup trop loin.</p>
+      <p>Un long tentacule noir glisse le long de la barque. Épais comme une cuisse, il se replie lentement sur lui-même. Son extrémité vient heurter le bois.</p>
 
-      <p>Tu te penches davantage.</p>
+      <p>Tu comprends d’où venaient les coups.</p>
 
-      <p>Un visage apparaît entre les lumières.</p>
+      <p>Soudain, le tentacule disparaît sous la barque.</p>
 
-      <p><strong>Sir Aldren.</strong></p>
+      <p>L’eau se soulève.</p>
 
-      <p>Il flotte plusieurs mètres sous la surface, parfaitement immobile.</p>
+      <p><strong>Il jaillit vers toi.</strong></p>
 
-      <p>Ses yeux s’ouvrent.</p>
-
-      <p>Sa bouche prononce quelque chose.</p>
-
-      <p>Tu n’entends rien.</p>
-
-      <p>Puis le visage recule dans l’obscurité.</p>
-
-      <p>Trop vite.</p>
-
-      <p>Comme s’il n’avait jamais appartenu à un corps.</p>
-
-      <p>Tu te redresses.</p>
-
-      <p>Au même instant, la barque cesse de flotter normalement.</p>
+      <p><strong>Ta Dextérité actuelle : ${currentDexterity(state)}</strong></p>
     `,
-    choices: [
-      { label: 'Reprendre les rames', to: 'c45' }
-    ]
+    choices: state => [{
+      label: state.weapon === 'none'
+        ? 'Esquiver le tentacule — tester ta Dextérité'
+        : 'Dégainer et frapper le tentacule — tester ta Dextérité',
+      to: 'c46',
+      effect: s => {
+        const success = roll3D6(s, 'Dextérité', currentDexterity(s));
+        s.flags.lakeTentacleOutcome = success ? 'counter' : 'lookHit';
+        if (!success) rollDamage(s, 'lakeTentacleLookHit', 3);
+          /* Tentacule : choc physique, aucune contamination. */
+      }
+    }]
   },
 
   c43: {
@@ -2521,51 +2709,25 @@ const STORY = {
   c45: {
     number: 'PAGE 45',
     title: '',
-    image: 'Quelque chose sous la coque',
+    image: 'Le tentacule surgit',
     text: state => `
-      <p>Tu reprends les rames.</p>
+      <p>Tu resserres les mains sur les rames et poursuis ta route.</p>
 
-      <p>Tu essaies de ne plus regarder l’eau.</p>
+      <p>Les coups cessent.</p>
 
-      <p>Alors le lac change de forme.</p>
+      <p>Pendant quelques secondes, seule l’eau glisse contre la coque.</p>
 
-      <p>À une dizaine de mètres devant toi, la surface se soulève lentement.</p>
+      <p>Soudain, un tentacule noir, épais comme une cuisse, jaillit hors de l’eau et s’abat sur toi.</p>
 
-      <p>Pas une vague.</p>
+      <p>Tu n’as pas le temps de saisir ton arme.</p>
 
-      <p>Une bosse immense.</p>
+      <p>Le choc te projette contre le bord de la barque. Le tentacule se rétracte aussitôt et disparaît sous la surface.</p>
 
-      <p>Elle avance sous l’eau sans produire le moindre bruit.</p>
-
-      <p>Elle passe sous la barque.</p>
-
-      <p>Le bois monte de presque un mètre.</p>
-
-      <p>Pendant une seconde, tu distingues sous tes pieds quelque chose de plus sombre encore que l’eau.</p>
-
-      <p>Ton esprit cherche aussitôt une taille à lui donner.</p>
-
-      <p>Plus large que la barque. Puis qu’une maison. Puis davantage encore.</p>
-
-      <p>Mais aucune comparaison ne tient : la courbure aperçue sous l’eau ne semble jamais appartenir au même volume.</p>
-
-      <p>Tu renonces à comprendre ce qui vient de passer sous toi.</p>
-
-      <p>Puis la présence continue sa route.</p>
-
-      <p>La barque retombe brutalement.</p>
-
-      <p><strong>Ta Dextérité actuelle : ${currentDexterity(state)}</strong></p>
+      ${hasDamageRoll(state, 'lakeTentacleSurprised') ? lakeTentacleDamageHtml(state, 'lakeTentacleSurprised') : ''}
     `,
-    choices: [{
-      label: 'T’agripper et garder l’équilibre — lancer les trois dés de Dextérité',
-      to: 'c46',
-      effect: s => {
-        const ok = roll3D6(s, 'Dextérité', currentDexterity(s));
-        s.flags.lakeBalance = ok ? 'success' : 'fail';
-        if (!ok) s.flags.lakeImpactDamage = applyDamage(s, 2);
-      }
-    }]
+    choices: state => state.hp <= 0
+      ? fatalChoices()
+      : [{ label: 'Te relever et poursuivre la traversée', to: 'c46' }]
   },
 
   c46: {
@@ -2573,39 +2735,60 @@ const STORY = {
     title: '',
     image: 'Le lac se referme',
     text: state => {
-      const r = diceResultHtml(state);
-      if (state.flags.lakeBalance === 'success') {
-        return r + `
-          <p>Tu te jettes au fond de la barque et agrippes les deux bords.</p>
+      // L’îlot doit être découvert dans chaque issue de l’attaque, avant le choix de l’accoster.
+      // Ne pas présenter de nouveaux choix d’exploration après une blessure mortelle.
+      const isletDiscovery = state.hp > 0 ? `
+        <p>Tu récupères les rames et reprends lentement ta route.</p>
 
-          <p>L’embarcation retombe dans un claquement violent.</p>
+        <p>Sur ta droite, la brume se déchire un instant.</p>
 
-          <p>De l’eau noire passe par-dessus le plat-bord, mais tu conserves l’équilibre.</p>
+        <p>À quelques dizaines de mètres, une masse de pierre émerge de l’eau. Une bonne partie de l’îlot se perd dans la brume, mais tu distingues les vestiges de plusieurs murs.</p>
 
-          <p>La masse continue sa route sous la surface.</p>
+        <p>Un ancien quai forme un rebord assez bas pour y accoster.</p>
 
-          <p>Puis elle disparaît.</p>
+        <p>La brume commence déjà à se refermer sur l’îlot.</p>
 
-          <p>En quelques secondes, le lac redevient parfaitement plat.</p>
+        <p>Tu peux t’en approcher pour l’examiner, ou poursuivre ta traversée sans prendre le risque de t’arrêter.</p>
+      ` : '';
+      if (state.flags.lakeTentacleOutcome === 'counter') {
+        return diceResultHtml(state) + (state.weapon === 'none'
+          ? `
+            <p>Tu te rejettes en arrière juste avant que le tentacule ne s’abatte sur toi.</p>
 
-          <p>Comme si rien n’avait jamais bougé.</p>
-        `;
+            <p>Il frappe le bord de la barque et replonge aussitôt.</p>
+          `
+          : `
+            <p>Tu te rejettes en arrière et dégaines d’un même mouvement.</p>
+
+            <p>Ta lame entaille le tentacule au moment où il franchit le bord.</p>
+
+            <p>Il se replie brusquement et disparaît sous l’eau.</p>
+          `) + `
+            <p>Tu restes prêt à frapper, mais rien ne remonte.</p>
+
+            <p>Le lac retrouve peu à peu son immobilité.</p>
+          ` + isletDiscovery;
       }
-      return r + `
-        <p>Tu cherches un appui trop tard.</p>
+      if (state.flags.lakeTentacleOutcome === 'lookHit') {
+        return diceResultHtml(state) + `
+          <p>Tu tentes de dégainer, mais le tentacule t’atteint avant que tu puisses frapper.</p>
 
-        <p>La barque retombe et tu es projeté contre un banc de bois.</p>
+          <p>Le choc te projette contre un banc de bois.</p>
 
-        <p>La douleur te coupe le souffle.</p>
+          ${lakeTentacleDamageHtml(state, 'lakeTentacleLookHit')}
 
-        ${damageAbsorptionHtml(state.flags.lakeImpactDamage)}
+          <p>Lorsque tu te redresses, le tentacule a déjà replongé.</p>
 
-        <p>Lorsque tu parviens à te relever, la masse a déjà disparu.</p>
+          <p>Le lac redevient parfaitement immobile.</p>
+        ` + isletDiscovery;
+      }
+      return `
+        <p>Tu te remets péniblement en position.</p>
 
-        <p>Le lac est redevenu parfaitement lisse.</p>
+        <p>Tu surveilles l’eau quelques instants. Le tentacule ne revient pas.</p>
 
-        <p>Cette immobilité te paraît désormais plus effrayante que le mouvement.</p>
-      `;
+        <p>Le lac redevient parfaitement immobile.</p>
+      ` + isletDiscovery;
     },
     choices: state => {
       if (state.hp <= 0) return fatalChoices();
@@ -2627,15 +2810,19 @@ const STORY = {
 
       if (combat.round === 0 && !combat.lastBlade) {
         return `
-          <p>L’îlot n’est guère plus grand qu’une chambre.</p>
+          <p>Tu accostes contre l’ancien quai de pierre et tires la barque hors de l’eau.</p>
 
-          <p>Quatre piliers brisés entourent une dalle de pierre blanche.</p>
+          <p>L’îlot s’étend sur plusieurs dizaines de pas. Son sol irrégulier est parsemé de blocs effondrés et de vestiges de murs. À une extrémité, un escalier descend directement dans les eaux noires du lac.</p>
 
-          <p>Au centre est gravé un œil fermé.</p>
+          <p>Tu avances parmi les ruines.</p>
 
-          <p>Dans une petite cavité repose un anneau métallique couvert de dépôts gris.</p>
+          <p>Au centre de l’îlot, quatre piliers brisés entourent une large dalle de pierre blanche.</p>
 
-          <p>Tu fais un pas vers lui.</p>
+          <p>Un œil fermé y est gravé.</p>
+
+          <p>Dans une petite cavité, au milieu de la dalle, repose un anneau métallique couvert de dépôts gris.</p>
+
+          <p>Tu t’approches pour l’examiner.</p>
 
           <p>Quelque chose racle la pierre derrière l’un des piliers.</p>
 
@@ -2680,6 +2867,8 @@ const STORY = {
           <p>Sans le mouvement pour relier ses volumes entre eux, tu ne sais même plus quelle partie de ce corps tu avais prise pour une tête.</p>
 
           <p>Tu détournes les yeux.</p>
+
+          <p>Près de la créature, quelques grains de terre noire se mêlent à la poussière de pierre.</p>
 
           <p>Dans la cavité au centre de l’îlot, l’anneau est toujours là.</p>
 
@@ -2733,8 +2922,8 @@ const STORY = {
         return [
           {
             label: 'Prendre l’Anneau des Veilleurs (+1 Dextérité)',
-            to: 'c48',
-            effect: s => addItem(s, 'anneau_veilleurs', 'Anneau des Veilleurs', 'Un anneau ancien et très léger. +1 Dextérité.')
+            to: 'c127',
+            effect: s => addItem(s, 'anneau_veilleurs', 'Anneau des Veilleurs', 'Un anneau ancien et très léger. +1 Dextérité. Son motif peut actionner certains mécanismes des Veilleurs.')
           },
           { label: 'Laisser l’anneau et reprendre la barque', to: 'c48' }
         ];
@@ -2750,36 +2939,30 @@ const STORY = {
     text: `
       <p>La traversée continue encore longtemps.</p>
 
-      <p>Tu n’entends plus aucun coup sous la coque.</p>
-
-      <p>Tu aurais presque préféré.</p>
-
       <p>Enfin, une ligne de pierre apparaît dans la brume.</p>
 
       <p>La barque heurte une marche noyée.</p>
 
       <p>Tu descends dans quelques centimètres d’eau noire et tires l’embarcation derrière toi.</p>
 
-      <p>Devant toi s’ouvre une série d’arches basses.</p>
+      <p>Devant toi, des arches de pierre portent une rue au-dessus de l’eau. Un escalier remonte depuis les quais, entre les maisons serrées sur la pente.</p>
 
-      <p>Au-delà, tu aperçois des murs.</p>
+      <p>Plus haut, tu distingues des ponts, des ruelles et des terrasses. Tout est à taille humaine : quelqu’un a bâti ce quartier pour y vivre.</p>
 
-      <p>Des angles droits.</p>
+      <p>En levant les yeux, tu découvres une immense ouverture dans la voûte de la grotte. Le ciel apparaît très loin au-dessus du village. Le soleil entre à flots et éclaire les toits, les façades et les rues hautes.</p>
 
-      <p>Des escaliers.</p>
+      <p>Ici, au bord de l’eau, les arches et les marches noyées restent dans l’ombre. Tu distingues à peine le bord de la pierre sous tes pieds.</p>
 
-      <p>Une architecture entière surgit de l’ombre.</p>
-
-      <p>Pour la première fois depuis ton arrivée dans ce monde impossible, tu as devant toi quelque chose qui ressemble à une ville.</p>
     `,
     choices: [
-      { label: 'Entrer par les arches noyées', to: 'c63' }
+      { label: 'Entrer par les arches noyées', to: 'c66' }
     ]
   },
 
   c49: {
     number: 'PAGE 49',
     title: '',
+    noImage: true,
     image: 'La paroi friable',
     text: state => {
       const r = diceResultHtml(state);
@@ -2824,142 +3007,157 @@ const STORY = {
   c50: {
     number: 'PAGE 50',
     title: '',
-    image: 'Les bâtisseurs',
+    noImage: true,
+    image: 'Ceux qui sont descendus',
     text: `
-      <p>L’escalier débouche sur une terrasse verticale taillée dans la falaise.</p>
-
-      <p>Des fresques couvrent la paroi sur plusieurs dizaines de mètres.</p>
-
-      <p>Tu distingues de minuscules silhouettes humaines disposées autour d’une forme immense.</p>
-
-      <p>Au premier regard, tu crois assister à une cérémonie.</p>
-
-      <p>Des fidèles autour de leur dieu.</p>
-
-      <p>Puis tu remarques les outils.</p>
-
-      <p>Les cordes.</p>
-
-      <p>Les blocs de pierre.</p>
-
-      <p>Les hommes ne sont pas agenouillés.</p>
-
-      <p>Ils travaillent.</p>
-
-      <p>Ils élèvent des murs autour de la forme.</p>
-
-      <p>Ils ferment des passages.</p>
-
-      <p>Ils construisent quelque chose d’énorme autour d’elle.</p>
-
-      <p><strong>Une prison.</strong></p>
-
-      <p>Au-dessus de chaque scène revient le même symbole.</p>
-
-      <p>L’œil fermé.</p>
-
-      <p>Pour la première fois, une idée simple s’impose à toi.</p>
-
-      <p>Ce symbole n’est peut-être pas celui de ce qui dort sous la montagne.</p>
-
-      <p>Il pourrait être celui de ceux qui ont essayé de l’empêcher de se réveiller.</p>
+      <p>L’escalier débouche sur une terrasse taillée dans la falaise.</p>
+      <p>Une longue fresque couvre la paroi. Elle est divisée en plusieurs scènes que le temps a presque effacées.</p>
+      <p>Dans la première, des hommes et des femmes quittent leurs maisons. Certains portent des épées, d’autres des outils ou de simples sacs.</p>
+      <p>Tous marchent vers une montagne, la tête légèrement tournée, comme s’ils écoutaient quelque chose.</p>
+      <p>Tu suis leurs silhouettes du doigt.</p>
+      <p>Plus loin, ils descendent un escalier. Puis ils passent sous une arche marquée d’un œil fermé.</p>
+      <p>Sur la scène suivante, plusieurs sont allongés au pied d’un passage. Leurs armes et leurs outils sont éparpillés autour d’eux.</p>
+      <p>Un seul se tient encore debout, appuyé sur son épée. Son visage a disparu sous une fissure de la pierre.</p>
+      <p>Tu regardes de nouveau les premiers voyageurs.</p>
+      <p>Ils venaient d’endroits différents. Pourtant, ils ont tous pris la même direction.</p>
+      <p>Tu ignores ce qui les attirait, et ce qu’ils ont trouvé au bout du chemin.</p>
     `,
-    choices: [
-      { label: 'Examiner la fresque suivante', to: 'c51' }
-    ]
+    choices: [{ label: 'Examiner la gravure suivante', to: 'c51' }]
   },
 
   c51: {
     number: 'PAGE 51',
     title: '',
-    image: 'La petite lame noire',
+    image: 'La lame gravée',
     text: `
-      <p>La fresque suivante est beaucoup plus petite.</p>
-
-      <p>Un homme y est représenté de profil.</p>
-
-      <p>Dans sa main : une lame courte, entièrement noire.</p>
-
-      <p>Devant lui, plusieurs silhouettes humaines sont reliées à une masse immense par de minces traits gravés dans la pierre.</p>
-
-      <p>L’homme approche la lame de l’un de ces traits.</p>
-
-      <p>Sur l’image suivante, le trait est coupé.</p>
-
-      <p>La silhouette humaine tombe à genoux.</p>
-
-      <p>Mais elle est toujours humaine.</p>
-
-      <p>Tu repenses aux mots griffonnés dans la sacoche d’Aldren.</p>
-
-      <p>Parmi les notes d’Aldren, ces deux mots te reviennent : <em>lame noire</em>.</p>
-
-      <p>Tu avais imaginé une arme capable de tuer.</p>
-
-      <p>La fresque suggère autre chose.</p>
-
-      <p>Quelque chose qui <strong>coupe un lien</strong>.</p>
+      <p>Un petit panneau a été gravé à part, près du bord de la terrasse.</p>
+      <p>On y voit un voyageur devant une porte dont le contour se perd dans la roche.</p>
+      <p>Dans sa main, une lame courte et entièrement noire.</p>
+      <p>Il la lève vers un œil fermé, gravé au-dessus du passage.</p>
+      <p>La scène suivante a été brisée. Il ne reste qu’une fissure et quelques éclats de pierre.</p>
+      <p>Tu repenses aux notes d’Aldren : <em>« La lame noire. Trouver la lame noire. »</em></p>
+      <p>Quelqu’un a donc cherché cette arme avant lui.</p>
+      <p>Mais la fresque ne montre ni ce qu’il en a fait, ni ce qui l’attendait derrière la porte.</p>
     `,
-    choices: [
-      { label: 'Reprendre l’ascension', to: 'c52' }
-    ]
+    choices: [{ label: 'Reprendre l’ascension', to: 'c52' }]
   },
 
   c52: {
     number: 'PAGE 52',
     title: '',
+    noImage: true,
     image: 'La silhouette au sommet',
     text: `
-      <p>Tu quittes les fresques et retrouves ce qu’il reste de l’escalier.</p>
+      <p>Tu quittes les fresques et reprends l’ascension.</p>
 
-      <p>C’est alors que tu la vois.</p>
+      <p>Plus haut, sur une portion encore régulière de l’escalier, une silhouette se tient debout près de la paroi.</p>
 
-      <p>Très haut au-dessus de toi, une silhouette se tient sur une portion encore régulière de la montée.</p>
+      <p>Une silhouette humaine.</p>
 
-      <p>Immobile.</p>
+      <p>Après toutes les choses que tu as croisées dans ces profondeurs, sa posture presque ordinaire te surprend.</p>
 
-      <p>Trop loin pour distinguer un visage.</p>
+      <p>Elle est trop loin pour que tu distingues son visage.</p>
 
-      <p>Tu continues à monter.</p>
+      <p><strong>Et si c’était Aldren ?</strong></p>
 
-      <p>La silhouette est toujours là.</p>
-
-      <p>À exactement la même distance.</p>
-
-      <p>Tu accélères.</p>
-
-      <p>Elle ne se rapproche pas.</p>
-
-      <p>Tu t’arrêtes.</p>
-
-      <p>Tu lèves lentement une main.</p>
-
-      <p>Très loin, la silhouette lève la sienne.</p>
-
-      <p>Du même côté.</p>
-
-      <p>Tu baisses le bras.</p>
-
-      <p>Elle disparaît.</p>
-
-      <p>Il n’y a aucun endroit où elle aurait pu se cacher.</p>
-
-      <p>Quelques mètres plus loin, tu remarques une fissure verticale dans la paroi.</p>
-
-      <p>Elle est juste assez large pour t’y glisser de profil.</p>
-
-      <p>Un courant d’air tiède en sort.</p>
-
-      <p>Et, très loin à l’intérieur, quelque chose gratte doucement la pierre.</p>
+      <p>L’homme ne semble pas t’avoir remarqué.</p>
     `,
     choices: [
-      { label: 'T’aventurer dans la fissure', to: 'c53', effect: s => { if (!s.flags.stairsCrackEntered) { s.flags.stairsCrackEntered = true; s.flags.stairsCrackDamage = applyDamage(s, 2); s.dexPenalty = (s.dexPenalty || 0) + 1; raiseContamination(s,1); } } },
-      { label: 'Ne pas t’y aventurer et poursuivre l’ascension', to: 'c54' }
+      { label: 'Appeler la silhouette', to: 'c53', effect: s => { s.flags.stairsSilhouetteApproach = 'called'; } },
+      { label: 'T’approcher discrètement', to: 'c54', effect: s => { s.flags.stairsSilhouetteApproach = 'stealth'; } }
     ]
   },
 
   c53: {
     number: 'PAGE 53',
+    title: '',
+    noImage: true,
+    image: 'L’appel',
+    text: `
+      <p>« Aldren ! »</p>
+
+      <p>Ta voix résonne entre les parois.</p>
+
+      <p>La silhouette tourne brusquement la tête dans ta direction, puis disparaît entre deux avancées rocheuses.</p>
+
+      <p>Tu gravis les dernières marches pour la rejoindre.</p>
+
+      <p>À l’endroit où elle se tenait, tu découvres une fissure verticale, juste assez large pour t’y glisser de profil.</p>
+
+      <p>Un courant d’air tiède en sort.</p>
+
+      <p>Tu entends un frottement, quelque part à l’intérieur.</p>
+
+      <p>Impossible de savoir si c’est bien là qu’elle s’est réfugiée.</p>
+    `,
+    choices: [{ label: 'Examiner les abords de la fissure', to: 'c55' }]
+  },
+
+  c54: {
+    number: 'PAGE 54',
+    title: '',
+    image: 'La silhouette inhumaine',
+    text: `
+      <p>Tu avances lentement, en prenant soin de ne pas faire rouler les pierres sous tes pas.</p>
+
+      <p>La silhouette reste immobile.</p>
+
+      <p>À mesure que tu te rapproches, tu remarques que ses bras sont trop longs. Son dos présente une courbure anormale.</p>
+
+      <p>Un bruit humide accompagne chacun de ses mouvements.</p>
+
+      <p>Tu n’es plus qu’à quelques pas lorsqu’elle se retourne.</p>
+
+      <p>Ses yeux sont injectés de sang. Sous un front presque humain, son visage présente des traits déformés que tu ne parviens pas à reconnaître.</p>
+
+      <p>Elle pousse un râle grave et prolongé.</p>
+
+      <p>Puis elle pivote vers la paroi et se glisse dans une étroite fissure, avec une souplesse impossible.</p>
+
+      <p>Tu l’entends ramper quelques instants entre les pierres.</p>
+
+      <p>Puis plus rien.</p>
+
+      <p>Un courant d’air tiède sort de l’ouverture.</p>
+    `,
+    choices: [{ label: 'Rejoindre la fissure', to: 'c55' }]
+  },
+
+  c55: {
+    number: 'PAGE 55',
+    title: 'Devant la fissure',
+    noImage: true,
+    image: 'Devant la fissure',
+    text: state => `
+      <p>Tu t’arrêtes devant l’ouverture. La paroi est fendue sur toute la hauteur d’un homme, mais la fissure est à peine assez large pour te laisser passer de profil.</p>
+
+      ${state.flags.stairsSilhouetteApproach === 'stealth'
+        ? '<p>Tu sais que la chose au visage inhumain s’est glissée à l’intérieur. Un râle étouffé résonne encore au fond du passage.</p>'
+        : '<p>La silhouette a disparu près d’ici. Un léger frottement parvient du fond du passage, mais tu ignores ce qui le produit.</p>'}
+
+      <p>L’escalier se poursuit vers le haut, le long de la falaise.</p>
+
+      <p>Tu peux entrer dans la fissure ou la laisser derrière toi et continuer à monter.</p>
+    `,
+    choices: [
+      {
+        label: 'T’aventurer dans la fissure',
+        to: 'c56',
+        effect: s => {
+          if (!s.flags.stairsCrackEntered) {
+            s.flags.stairsCrackEntered = true;
+            s.flags.stairsCrackDamage = applyDamage(s, 2);
+            s.dexPenalty = (s.dexPenalty || 0) + 1;
+            raiseContamination(s, 2);
+          }
+        }
+      },
+      { label: 'Laisser la fissure derrière toi et poursuivre l’ascension', to: 'c57' }
+    ]
+  },
+
+  c56: {
+    number: 'PAGE 56',
     title: 'La fissure',
     image: 'La fissure',
     text: state => `
@@ -3005,10 +3203,6 @@ const STORY = {
 
       <p>Tu restes à genoux contre la roche, les paumes ouvertes sur la pierre, incapable de reprendre ton souffle.</p>
 
-      <p>Tu sais que tu t’en es sorti par toi-même.</p>
-
-      <p>Pourtant, les derniers instants refusent déjà de reprendre une forme nette dans ta mémoire.</p>
-
       ${damageAbsorptionHtml(state.flags.stairsCrackDamage)}
 
       <p>De la terre noire est tassée sous tes ongles, jusque dans les chairs.</p>
@@ -3019,6 +3213,8 @@ const STORY = {
 
       <p>Il en reste toujours.</p>
 
+      <p><strong>Terre noire : +2.</strong></p>
+
       <p><strong>Tu perds 1 point de Dextérité.</strong></p>
 
       <p>Tu finis par cesser de frotter.</p>
@@ -3027,11 +3223,11 @@ const STORY = {
     `,
     choices: state => state.hp <= 0
       ? fatalChoices()
-      : [{ label: 'Te relever et poursuivre', to: 'c54' }]
+      : [{ label: 'Te relever et poursuivre', to: 'c57' }]
   },
 
-  c54: {
-    number: 'PAGE 54',
+  c57: {
+    number: 'PAGE 57',
     title: 'Au-dessus de la cité',
     image: 'Au-dessus de la cité',
     text: state => `
@@ -3041,15 +3237,13 @@ const STORY = {
 
       <p>Et, très loin en contrebas, tu vois enfin où mènent les constructions.</p>
 
-      <p>Une cité entière occupe la vallée de pierre.</p>
+      <p>Un village de pierre s’étage sur les pentes de la cavité.</p>
 
-      <p>Des rues droites disparaissent sous des arches. Des escaliers montent vers des murs sans porte. Des portes isolées se dressent au milieu de places vides.</p>
+      <p>De petites maisons bordent des rues étroites. Tu distingues une place, des escaliers entre les habitations et ce qui ressemble à des ateliers.</p>
 
-      <p>Certaines structures semblent continuer jusque sur les parois verticales.</p>
-
-      <p>D’autres paraissent suspendues au plafond invisible.</p>
-
-      <p>Un escalier plus récent, clairement taillé à taille humaine, descend vers une petite porte percée à la base d’une arche.</p>
+      <p>Très haut, une immense ouverture laisse voir le ciel. Le soleil éclaire les toits, les terrasses et une grande partie des rues. Seuls les passages couverts et les quartiers adossés à la roche restent dans l’ombre.</p>
+      <p>À cette distance, les portes et les fenêtres paraissent presque accueillantes.</p>
+      <p>Un escalier taillé dans la falaise descend vers une porte du quartier haut.</p>
 
       <p>Juste avant la porte repose le squelette d’un homme.</p>
 
@@ -3060,19 +3254,19 @@ const STORY = {
       ${hasItem(state, 'gantelet_veilleur') ? '<p>Tu as déjà ajouté le gantelet à ton équipement.</p>' : '<p>Il pourrait encore encaisser un coup à ta place.</p>'}
     `,
     choices: state => hasItem(state, 'gantelet_veilleur')
-      ? [{ label: 'Franchir la porte et entrer dans les quartiers hauts', to: 'c64' }]
+      ? [{ label: 'Franchir la porte et entrer dans les quartiers hauts', to: 'c67' }]
       : [
           {
             label: 'Prendre le Gantelet de Veilleur (+1 Protection)',
-            to: 'c64',
+            to: 'c128',
             effect: s => addProtectiveItem(s, 'gantelet_veilleur', 'Gantelet de Veilleur', 'Un gant d’armure articulé trouvé au-dessus de la Cité morte. Il peut absorber 1 point de dégâts avant ta Vie.', 1)
           },
-          { label: 'Le laisser et franchir la porte', to: 'c64' }
+          { label: 'Le laisser et franchir la porte', to: 'c67' }
         ]
   },
 
-  c55: {
-    number: 'PAGE 55',
+  c58: {
+    number: 'PAGE 58',
     title: 'La corniche du vide',
     image: 'La corniche du vide',
     onEnter: s => { s.flags.worldRoute = 'bridge'; },
@@ -3091,7 +3285,7 @@ const STORY = {
 
       <p>La corniche contourne un éperon.</p>
 
-      <p>Le pont apparaît.</p>
+      <p>Le pont est désormais devant toi.</p>
 
       <p>Long. Étroit. Suspendu entre deux masses de pierre.</p>
 
@@ -3106,12 +3300,12 @@ const STORY = {
       <p>Tu commences la traversée.</p>
     `,
     choices: [
-      { label: 'Avancer sur le pont', to: 'c56' }
+      { label: 'Avancer sur le pont', to: 'c59' }
     ]
   },
 
-  c56: {
-    number: 'PAGE 56',
+  c59: {
+    number: 'PAGE 59',
     title: '',
     image: 'Les pas sous tes pieds',
     text: state => `
@@ -3145,12 +3339,12 @@ const STORY = {
     `,
     choices: state => {
       const list = [
-        { label: 'Garder ton calme et continuer lentement', to: 'c60', effect: s => { s.flags.bridgeSolution = 'calm'; } }
+        { label: 'Garder ton calme et continuer lentement', to: 'c129', effect: s => { s.flags.bridgeSolution = 'calm'; s.flags.bridgeCalmPassed = roll3D6(s, 'Dextérité', currentDexterity(s)); } }
       ];
       if (state.throwingBlades > 0) {
         list.push({
           label: 'Lancer une lame dans le vide pour l’attirer ailleurs',
-          to: 'c60',
+          to: 'c130',
           effect: s => {
             s.throwingBlades -= 1;
             syncThrowingBlades(s);
@@ -3160,22 +3354,22 @@ const STORY = {
       }
       list.push(
         {
-          label: 'Courir jusqu’à l’autre côté — tester ta Dextérité',
-          to: 'c57',
+          label: 'Courir jusqu’à l’autre côté',
+          to: 'c60',
           effect: s => {
             const ok = roll3D6(s, 'Dextérité', currentDexterity(s));
             s.flags.bridgeRun = ok ? 'success' : 'fail';
-            if (!ok) s.flags.bridgeRunDamage = applyDamage(s, 1);
+            if (!ok) { s.flags.bridgeRunDamage = applyDamage(s, 1); /* Chute ordinaire : aucune contamination. */ }
           }
         },
-        { label: 'Frapper la chose à travers les planches', to: 'c58' }
+        { label: 'Frapper la chose à travers les planches', to: 'c61' }
       );
       return list;
     }
   },
 
-  c57: {
-    number: 'PAGE 57',
+  c60: {
+    number: 'PAGE 60',
     title: '',
     image: 'La course sur le pont',
     text: state => {
@@ -3218,13 +3412,13 @@ const STORY = {
     choices: state => {
       if (state.hp <= 0) return fatalChoices();
       return state.flags.bridgeRun === 'success'
-        ? [{ label: 'Reprendre ton souffle', to: 'c60' }]
-        : [{ label: 'Te défendre', to: 'c58' }];
+        ? [{ label: 'Reprendre ton souffle', to: 'c63' }]
+        : [{ label: 'Te défendre', to: 'c61' }];
     }
   },
 
-  c58: {
-    number: 'PAGE 58',
+  c61: {
+    number: 'PAGE 61',
     title: '',
     image: 'Le marcheur sous le pont',
     text: state => `
@@ -3248,7 +3442,6 @@ const STORY = {
 
       <p><strong>TOC. TOC. TOC.</strong></p>
 
-      <p>Tu reconnais immédiatement le rythme exact des trois notes entendues dans la forêt de Rochebrume.</p>
 
       <p>Le son descend très loin sous le pont.</p>
 
@@ -3258,11 +3451,11 @@ const STORY = {
 
       ${enemyCardHtml(state, 'bridgeWalker', ENEMIES.bridgeWalker)}
     `,
-    choices: state => combatActionChoices(state, 'bridgeWalker', ENEMIES.bridgeWalker, 'c59')
+    choices: state => combatActionChoices(state, 'bridgeWalker', ENEMIES.bridgeWalker, 'c62')
   },
 
-  c59: {
-    number: 'PAGE 59',
+  c62: {
+    number: 'PAGE 62',
     title: '',
     image: 'Le combat au-dessus du vide',
     text: state => {
@@ -3339,1181 +3532,917 @@ const STORY = {
     },
     choices: state => {
       const combat = combatState(state, 'bridgeWalker', ENEMIES.bridgeWalker);
-      if (combat.hp <= 0) return [{ label: 'Achever la traversée', to: 'c60' }];
+      if (combat.hp <= 0) return [{ label: 'Achever la traversée', to: 'c63' }];
       if (state.hp <= 0) return fatalChoices();
-      return combatActionChoices(state, 'bridgeWalker', ENEMIES.bridgeWalker, 'c59', 'Continuer le combat');
+      return combatActionChoices(state, 'bridgeWalker', ENEMIES.bridgeWalker, 'c62', 'Continuer le combat');
     }
   },
 
-  c60: {
-    number: 'PAGE 60',
+  c63: {
+    number: 'PAGE 63',
     title: 'L’autre extrémité du pont',
     image: 'L’autre extrémité du pont',
     text: state => {
-      const intro = state.flags.bridgeSolution === 'blade'
-        ? `<p>La lame de jet tinte contre une pierre très loin sous le pont.</p><p>La chose lâche aussitôt la face inférieure du pont et disparaît dans la brume à sa poursuite.</p>`
-        : state.flags.bridgeSolution === 'calm'
-          ? `<p>Tu continues à avancer sans accélérer.</p><p>La chose reste sous toi jusqu’aux dernières planches, puis s’arrête exactement à la limite de la roche.</p><p>Elle ne franchit pas le bord.</p>`
-          : '';
+      const intro = state.flags.bridgeSolution === 'calm'
+        ? `<p>Tu continues à avancer sans accélérer.</p><p>La chose reste sous toi jusqu’aux dernières planches, puis s’arrête exactement à la limite de la roche.</p><p>Elle ne franchit pas le bord.</p>`
+        : '';
       return `
         ${intro}
 
         <p>Tu atteins enfin l’autre extrémité du pont.</p>
 
-        <p>Près d’un ancien point d’ancrage, un squelette est assis contre la pierre.</p>
+        <p>Près d’un ancien point d’ancrage, un corps desséché repose contre la pierre.</p>
 
-        <p>Il porte encore autour de la taille une étrange ceinture faite de corde rouge tressée.</p>
+        <p>Des lambeaux de chair noire maintiennent encore une partie des os entre eux.</p>
+
+        <p>Le crâne, lui, a roulé un peu plus loin, entre deux pierres.</p>
+
+        <p>Autour de la taille, le mort porte encore une étrange ceinture faite de corde rouge tressée.</p>
 
         <p>Elle ressemble aux fragments aperçus sur les pitons de la corniche.</p>
 
         <p>Le nœud est intact malgré l’âge.</p>
 
         <p>Sur une petite plaque de cuivre est gravé l’œil fermé.</p>
+
+        <p>Une sacoche de cuir desséché pend encore à son côté.</p>
       `;
     },
-    choices: state => hasItem(state, 'ceinture_rouge')
-      ? [{ label: 'Continuer vers la porte', to: 'c61' }]
-      : [
-          {
-            label: 'Prendre la Ceinture de corde rouge',
-            to: 'c61',
-            effect: s => {
-              addItem(
-                s,
-                'ceinture_rouge',
-                'Ceinture de corde rouge',
-                'Une ceinture des Veilleurs. Elle accorde +1 Force lors des tests pour grimper, retenir ou se suspendre.'
-              );
-            }
-          },
-          { label: 'La laisser', to: 'c61' }
-        ]
-  },
-
-  c61: {
-    number: 'PAGE 61',
-    title: 'La porte suspendue',
-    image: 'La porte suspendue',
-    text: `
-      <p>La porte creusée dans la falaise est beaucoup plus petite que les structures alentour.</p>
-
-      <p>Elle a manifestement été ajoutée plus tard.</p>
-
-      <p>À l’intérieur, un couloir descend en spirale.</p>
-
-      <p>De longues ouvertures donnent parfois sur le vide.</p>
-
-      <p>À travers elles, tu aperçois peu à peu des toits qui ne sont pas des toits, des rues verticales et des arches empilées les unes sur les autres.</p>
-
-      <p>La cité se rapproche.</p>
-
-      <p>Puis le couloir s’interrompt devant une passerelle de pierre qui rejoint une construction latérale.</p>
-    `,
-    choices: [
-      { label: 'Traverser la passerelle', to: 'c62' }
-    ]
-  },
-
-  c62: {
-    number: 'PAGE 62',
-    title: 'La rue suspendue',
-    image: 'La rue suspendue',
-    text: `
-      <p>Tu débouches dans ce qui ressemble à une rue.</p>
-
-      <p>Mais elle longe une paroi verticale à plusieurs centaines de mètres au-dessus du fond.</p>
-
-      <p>Des portes s’ouvrent sur le vide.</p>
-
-      <p>D’autres sont couchées à plat dans le sol.</p>
-
-      <p>Tu progresses entre ces ouvertures impossibles jusqu’à trouver un escalier plus récent, taillé à taille humaine.</p>
-
-      <p>Il descend vers les niveaux centraux.</p>
-
-      <p>Le silence de la ville commence à t’envelopper.</p>
-    `,
-    choices: [
-      { label: 'Descendre vers le centre', to: 'c65' }
-    ]
-  },
-
-  c63: {
-    number: 'PAGE 63',
-    title: 'Les quartiers noyés',
-    image: 'Les quartiers noyés',
-    text: `
-      <p>Tu passes sous les arches basses.</p>
-
-      <p>L’eau noire recouvre encore le sol par endroits.</p>
-
-      <p>Des escaliers descendent dans des bassins sans fond visible.</p>
-
-      <p>Des portes sont à moitié immergées dans les murs.</p>
-
-      <p>Tu marches dans ce quartier noyé en suivant les parties sèches.</p>
-
-      <p>À plusieurs reprises, tu crois voir des lumières très loin sous l’eau des rues.</p>
-
-      <p>Les mêmes étoiles impossibles que dans le lac.</p>
-
-      <p>Tu refuses de regarder longtemps.</p>
-
-      <p>Une rampe de pierre finit par remonter vers un niveau plus élevé.</p>
-
-      <p>Au sommet, les rues deviennent sèches.</p>
-    `,
-    choices: [
-      { label: 'Suivre la grande rue', to: 'c66' }
-    ]
+    choices: state => {
+      const choices = [];
+      if (!state.flags.bridgeSatchelSearched) {
+        choices.push({ label: 'Fouiller la sacoche du mort', to: 'c65' });
+      }
+      if (!hasItem(state, 'ceinture_rouge')) {
+        choices.push({
+          label: 'Prendre la Ceinture de corde rouge',
+          to: 'c131',
+          effect: s => {
+            addItem(
+              s,
+              'ceinture_rouge',
+              'Ceinture de corde rouge',
+              'Une ceinture des Veilleurs. Elle accorde +1 Force lors des tests pour grimper, retenir ou se suspendre.'
+            );
+          }
+        });
+      }
+      choices.push({ label: 'Laisser le corps et rejoindre la porte', to: 'c64' });
+      return choices;
+    }
   },
 
   c64: {
     number: 'PAGE 64',
-    title: 'Les quartiers hauts',
-    image: 'Les quartiers hauts',
+    title: 'La porte suspendue',
+    image: 'La porte suspendue',
     text: `
-      <p>Tu entres dans la cité par le haut.</p>
+      <p>Une porte de bois renforcé ferme le passage creusé dans la falaise. Sa hauteur suffit à peine à laisser passer un homme en armure.</p>
 
-      <p>D’ici, les rues ressemblent à des tranchées géométriques creusées entre des blocs noirs.</p>
+      <p>Derrière elle, un escalier descend en suivant la roche. À mesure que tu avances, la lumière du jour se fait de plus en plus présente.</p>
 
-      <p>Tu descends plusieurs rampes.</p>
+      <p>Une immense ouverture dans la voûte de la caverne laisse apparaître le ciel. Sous cette lumière se dévoilent les toits de pierre, les cheminées et les fenêtres du quartier haut. Rien ne distingue ces maisons de celles d’un village ordinaire, sinon l’immense caverne qui les abrite.</p>
 
-      <p>À chaque niveau, les proportions changent.</p>
+      <p>L’escalier aboutit à une passerelle bordée d’un parapet. Tu la traverses et rejoins une rue étroite, bordée de maisons silencieuses.</p>
 
-      <p>Une porte minuscule mène à une salle gigantesque.</p>
+      <p>Une porte est restée entrouverte. Des seaux abandonnés reposent près du seuil. Pas une voix, pas un bruit d’atelier.</p>
 
-      <p>Un escalier assez large pour cinquante hommes se termine contre un mur parfaitement lisse.</p>
-
-      <p>Plus bas, tu retrouves enfin des traces humaines : marques de craie, anciennes cordes, petits symboles de l’œil fermé gravés près des passages praticables.</p>
-
-      <p>Les Veilleurs ont parcouru cette ville.</p>
-
-      <p>Tu suis leurs marques jusqu’à une grande rue centrale.</p>
+      <p>Plus bas, un escalier descend vers une place baignée de soleil.</p>
     `,
-    choices: [
-      { label: 'Suivre la grande rue', to: 'c66' }
-    ]
+    choices: [{ label: 'Rejoindre la place', to: 'c69' }]
   },
 
+  // La rue haute de l'ancienne page 65 a été regroupée à la page 64.
+  // La page 65 sert désormais à la découverte facultative de la sacoche du pont.
   c65: {
     number: 'PAGE 65',
-    title: 'La porte latérale',
-    image: 'La porte latérale',
-    text: `
-      <p>L’escalier humain t’amène devant une ouverture étroite percée dans un mur gigantesque.</p>
+    title: 'La sacoche du Veilleur',
+    noImage: true,
+    onEnter: s => {
+      if (!s.flags.bridgeSatchelSearched) {
+        s.flags.bridgeSatchelSearched = true;
+        s.throwingBlades = (s.throwingBlades || 0) + 3;
+        syncThrowingBlades(s);
+      }
+    },
+    text: state => `
+      <p>Tu ouvres la sacoche. À l’intérieur, trois lames de jet sont enveloppées dans un morceau de toile, à côté d’un parchemin plié.</p>
 
-      <p>Tu la franchis.</p>
+      <p>Un œil fermé est imprimé au bas du texte.</p>
 
-      <p>De l’autre côté, une avenue s’étend dans les deux directions.</p>
+      <blockquote>« Nouvel ordre reçu :<br>
+      Garder le pont dans les deux sens.<br>
+      Nul ne doit désormais quitter la cité.<br>
+      Toute tentative de fuite sera punie de mort.<br>
+      Tout garde refusant d’appliquer cet ordre subira la même peine. »</blockquote>
 
-      <p>Des colonnes apparaissent puis disparaissent dans la brume.</p>
+      <p>Tu ranges les trois lames de jet dans ton équipement.</p>
 
-      <p>Au-dessus de toi, une seconde rue traverse l’espace à angle droit.</p>
-
-      <p>Elle est construite sur le plafond d’une arche.</p>
-
-      <p>Tu ne sais plus exactement ce qui est en haut ou en bas dans cette ville.</p>
-
-      <p>Pourtant, au sol, tu retrouves un petit œil fermé gravé dans une dalle.</p>
-
-      <p>Une flèche grossière pointe vers le centre.</p>
-
-      <p>Tu la suis.</p>
+      <p><strong>Tu possèdes maintenant ${state.throwingBlades} lame${state.throwingBlades > 1 ? 's' : ''} de jet.</strong></p>
     `,
-    choices: [
-      { label: 'Atteindre le centre de la cité', to: 'c66' }
-    ]
+    choices: state => {
+      if (hasItem(state, 'ceinture_rouge')) {
+        return [{ label: 'Rejoindre la porte', to: 'c64' }];
+      }
+      return [
+        {
+          label: 'Prendre aussi la Ceinture de corde rouge',
+          to: 'c131',
+          effect: s => {
+            addItem(
+              s,
+              'ceinture_rouge',
+              'Ceinture de corde rouge',
+              'Une ceinture des Veilleurs. Elle accorde +1 Force lors des tests pour grimper, retenir ou se suspendre.'
+            );
+          }
+        },
+        { label: 'Laisser la ceinture et rejoindre la porte', to: 'c64' }
+      ];
+    }
   },
+
 
   c66: {
     number: 'PAGE 66',
-    title: 'La Cité morte',
-    image: 'La Cité morte',
-    onEnter: s => setCheckpoint(s, 'La Cité morte'),
-    text: state => {
-      const otherWays = [];
-      if (state.flags.worldRoute !== 'lake') otherWays.push('une rampe luisante d’humidité remonte depuis des quartiers noyés');
-      if (state.flags.worldRoute !== 'stairs') otherWays.push('un escalier étroit descend des niveaux supérieurs');
-      if (state.flags.worldRoute !== 'bridge') otherWays.push('une porte latérale s’ouvre vers le vide et laisse entrevoir, très loin, la ligne d’un pont');
-      const routesLine = otherWays.length
-        ? `<p>Un peu plus loin, d’autres ouvertures rejoignent l’avenue. ${otherWays.join(' ; ')}.</p><p>Au sol, d’anciennes traces de passage convergent depuis chacune d’elles vers la place.</p>`
-        : '';
-      const contamination = state.flags.blackEarthContamination
-        ? `<p>Le goût de terre resté au fond de ta gorge te paraît soudain moins étranger.</p><p>Cette pensée te vient sans raison. Tu la chasses aussitôt.</p>`
-        : '';
+    title: 'Les quartiers noyés',
+    noImage: true,
+    image: 'Les quartiers noyés',
+    text: state => `
+      <p>Tu passes sous les arches basses.</p>
 
-      return `
-        <p>Le passage que tu suivais finit par s’élargir.</p>
+      <p>L’eau noire recouvre encore le sol par endroits.</p>
 
-        <p>Sans véritable seuil, tu te retrouves dans une avenue assez vaste pour qu’un village entier y tienne.</p>
+      <p>Des marches descendent vers des portes dont le bas a disparu sous l’eau. Derrière une fenêtre, tu distingues encore le dossier d’une chaise.</p>
 
-        ${routesLine}
+      <p>Tu avances sur les portions sèches de la rue. De petites enseignes de bois pourrissent au-dessus d’anciens ateliers ; les seuils sont usés par des années de passage.</p>
 
-        <p>Les façades montent si haut que leur sommet se dissout dans la lumière blanche.</p>
+      <p>L’eau sombre se confond presque avec les pierres. Le clapotis de tes bottes est le seul bruit dans ce quartier désert.</p>
+      <p>Une rampe de pierre finit par remonter vers une rue plus élevée. Un peu de lumière chaude apparaît à son sommet.</p>
 
-        <p>Il n’y a aucune fenêtre.</p>
-
-        <p>Seulement des portes.</p>
-
-        <p>Des centaines.</p>
-
-        <p>Certaines sont trop petites pour un enfant. D’autres ont la hauteur d’un clocher.</p>
-
-        <p>Au bout de l’avenue, l’espace s’ouvre sur une place circulaire.</p>
-
-        <p>En son centre se dresse une vasque de pierre sèche.</p>
-
-        <p>Une poussière noire repose au fond.</p>
-
-        <p>Tu t’arrêtes à plusieurs pas.</p>
-
-        <p>Rien ne bouge.</p>
-
-        <p>Plus tu la regardes, moins ta fatigue paraît importante.</p>
-
-        <p>La douleur de tes épaules s’éloigne. Ta peur aussi.</p>
-
-        <p>Une idée se forme avec une douceur qui n’a rien à faire ici : il suffirait de plonger les doigts dans cette poussière pour continuer plus facilement.</p>
-
-        <p>Pour devenir un peu plus fort.</p>
-
-        <p>Peut-être assez pour ne plus avoir peur du reste.</p>
-
-        ${contamination}
-
-        <p>Ta main se soulève légèrement avant que tu t’en rendes compte.</p>
-
-        <p>Tu la rabats contre toi.</p>
-
-
-        <p>En reculant, tu éprouves un bref regret.</p>
-
-        <p>C’est ce regret qui te fait quitter la vasque.</p>
-
-        <p>Trois passages s’ouvrent autour de la place.</p>
-
-        <p>Le premier est couvert de noms gravés dans la pierre.</p>
-
-        <p>Le second aligne une suite de portes étroites, toutes fermées.</p>
-
-        <p>Le dernier laisse filtrer une lumière blanche sous une arche marquée de l’œil fermé.</p>
-      `;
-    },
+      <p>Au sommet, les rues deviennent sèches.</p>
+    `,
     choices: [
-      { label: 'Suivre le passage couvert de noms', to: 'c67', effect: s => { s.flags.cityRoute = 'names'; } },
-      { label: 'Entrer dans le couloir aux portes étroites', to: 'c72', effect: s => { s.flags.cityRoute = 'voices'; } },
-      { label: 'Suivre la lumière blanche sous l’arche', to: 'c77', effect: s => { s.flags.cityRoute = 'laboratory'; } }
+      { label: 'Suivre la grande rue', to: 'c69' }
     ]
   },
 
   c67: {
     number: 'PAGE 67',
-    title: 'La salle des noms',
-    image: 'La salle des noms',
+    title: 'Les quartiers hauts',
+    image: 'Les quartiers hauts',
     text: `
-      <p>Le passage se rétrécit, puis s’ouvre sur une longue galerie aux murs parfaitement lisses.</p>
+      <p>Tu entres dans la cité par le haut.</p>
 
-      <p>Ils sont couverts de noms.</p>
+      <p>Les maisons sont bâties en terrasses le long de la pente. Un petit escalier mène d’une rue à l’autre ; des murets retiennent les jardins aujourd’hui desséchés.</p>
+      <p>Les passages couverts restent dans l’ombre. Plus bas, le soleil éclaire la place et les toits des maisons qui l’entourent.</p>
+      <p>Tu passes devant un atelier. Des outils sont encore posés sur l’établi, près d’une porte fermée.</p>
 
-      <p>Des centaines d’abord.</p>
+      <p>Plus bas, des marques de craie et de petits symboles de l’œil fermé indiquent les passages utilisés par les Veilleurs.</p>
 
-      <p>Puis des milliers.</p>
-
-      <p>Certains sont presque effacés. D’autres paraissent beaucoup plus récents.</p>
-
-      <p>À côté de plusieurs inscriptions, tu remarques de petits signes répétés : un œil fermé, trois traits courts, parfois une ligne interrompue.</p>
-
-      <p>Ce n’est pas un monument funéraire.</p>
-
-      <p>Les noms ont été classés.</p>
-
-      <p>Notés.</p>
-
-      <p>Suivis.</p>
-
-      <p>Plus loin, une inscription plus grande a été gravée au-dessus d’une série de colonnes.</p>
-
-      <blockquote>CEUX QUI ENTENDENT L’APPEL DOIVENT ÊTRE INSCRITS AVANT LA DESCENTE.</blockquote>
-
-      <p>Tu relis lentement.</p>
-
-      <p>Puis un nom familier attire ton regard.</p>
+      <p>Tu les suis jusqu’à la grande rue centrale.</p>
     `,
-    choices: [{ label: 'T’approcher', to: 'c68' }]
+    choices: [
+      { label: 'Suivre la grande rue', to: 'c69' }
+    ]
   },
 
+  // Page retirée du parcours : une ancienne sauvegarde sur cette page reste lisible.
   c68: {
     number: 'PAGE 68',
-    title: '',
-    image: 'Ceux qui sont venus',
-    text: `
-      <p><strong>GASPARD VELLIN.</strong></p>
-
-      <p>À côté de son nom, trois traits courts ont été gravés dans la pierre.</p>
-
-      <p>Un peu plus loin :</p>
-
-      <p><strong>ANSELME VARN.</strong></p>
-
-      <p>Le même signe.</p>
-
-      <p>Tu poursuis le long du mur.</p>
-
-      <p><strong>ALDREN DE ROCHEBRUNE.</strong></p>
-
-      <p>Cette fois, l’œil fermé accompagne son nom.</p>
-
-      <p>La gravure est plus usée que celles de Gaspard et d’Anselme.</p>
-
-      <p>Tu ne sais pas ce que signifient encore ces marques, mais une chose devient difficile à ignorer :</p>
-
-      <p>Gaspard, Anselme et Aldren ne sont pas arrivés ici par hasard.</p>
-
-      <p>Les Veilleurs connaissaient les gens qui entendaient cet appel.</p>
-
-      <p>Ils inscrivaient leurs noms avant qu’ils ne descendent plus profondément sous la montagne.</p>
-
-      <p>Tu continues malgré toi à parcourir la liste.</p>
-
-      <p>Et tu trouves le tien.</p>
-    `,
-    choices: [{ label: 'Lire ton nom', to: 'c69' }]
+    title: 'Vers la place',
+    noImage: true,
+    text: `<p>Tu achèves la descente du quartier haut. La place ensoleillée est toute proche.</p>`,
+    choices: [{ label: 'Rejoindre la place', to: 'c69' }]
   },
 
   c69: {
     number: 'PAGE 69',
-    title: '',
-    image: 'Ton nom',
+    title: 'La Cité morte',
+    image: 'La Cité morte',
+    onEnter: s => setCheckpoint(s, 'La Cité morte'),
     text: state => {
-      const hero = escapeHtml(heroName(state)).toUpperCase();
+      const otherWays = [];
+      if (state.flags.worldRoute !== 'lake') otherWays.push('une rampe remonte depuis les quartiers noyés');
+      if (state.flags.worldRoute !== 'stairs') otherWays.push('un escalier descend entre les maisons des quartiers hauts');
+      if (state.flags.worldRoute !== 'bridge') otherWays.push('une ruelle rejoint la passerelle d’accès au pont');
+      const routesLine = otherWays.length
+        ? `<p>Un peu plus loin, d’autres ouvertures rejoignent l’avenue. ${otherWays.join(' ; ')}.</p><p>Au sol, d’anciennes traces de passage convergent depuis chacune d’elles vers la place.</p>`
+        : '';
+      const contamination = state.flags.blackEarthContamination
+        ? '<p>Le goût de terre resté au fond de ta gorge revient tandis que tu fixes la vasque.</p>'
+        : '';
       return `
-        <p><strong>${hero}.</strong></p>
-
-        <p>Ton nom est déjà gravé dans la pierre.</p>
-
-        <p>Tu restes immobile.</p>
-
-        <p>Les traits ne sont pas frais. Une fine poussière s’est déposée au fond des lettres.</p>
-
-        <p>Personne ici ne devrait connaître ton nom.</p>
-
-        <p>Personne ne t’a vu entrer dans la montagne.</p>
-
-        <p>Et pourtant il est là, parmi ceux de Gaspard, d’Anselme et d’Aldren.</p>
-
-        <p>À côté, le même signe que près du nom de Gaspard : trois entailles courtes.</p>
-
-        <p>Tu repenses à la poussière noire de la place.</p>
-
-        <p>À la terre sous les ongles.</p>
-
-        <p>Aux voix qui semblent parfois savoir plus de choses qu’elles ne devraient.</p>
-
-        <p>Pour la première fois, l’idée te vient que tu n’es peut-être plus seulement à la recherche d’Aldren.</p>
-
-        <p>Quelque chose, ici, t’a peut-être déjà reconnu.</p>
+        <p>Le passage que tu suivais rejoint la rue principale.</p>
+        <p>Des maisons de pierre se serrent de chaque côté. Leurs portes, leurs fenêtres et leurs cheminées ont des dimensions familières. Sous un auvent, des outils attendent encore sur un établi.</p>
+        ${routesLine}
+        <p>Une chaise est restée près d’un seuil. Tu pourrais presque croire que quelqu’un va sortir pour la rentrer.</p>
+        <p>Des lanternes à huile, toutes éteintes, pendent devant certaines maisons.</p>
+        <p>Mais aucune porte ne s’ouvre.</p>
+        <p>La rue débouche sur une petite place circulaire. Très haut au-dessus des toits, la grande ouverture de la voûte laisse entrer le jour. Le soleil éclaire les pavés, les façades et les terrasses alentour.</p>
+        <p>Au-delà de cette trouée lumineuse, la caverne demeure immense et sombre. Le village, lui, paraît presque prêt à reprendre vie.</p>
+        <p>Au centre repose une large vasque de pierre. Une fine couche de sable noir en tapisse le fond.</p>
+        <p>Tu t’en approches.</p>
+        <p>Les grains semblent remuer, bien qu’aucun souffle ne traverse la place.</p>
+        <p>Tu éprouves soudain le besoin d’y plonger la main. L’idée paraît parfaitement naturelle : tu es certain que quelque chose d’utile se trouve là.</p>
+        ${contamination}
+        <p>Tu tends les doigts.</p>
+        ${contaminationLevel(state) >= 4
+          ? '<p>Une force tente de rejeter ton bras en arrière, mais ton geste ne s’interrompt qu’après une douleur aiguë. Tu retires la main juste avant de toucher la poudre.</p>'
+          : '<p>À quelques centimètres de la poudre, ton bras se replie brutalement contre ta poitrine, comme tiré par une main invisible. Une douleur fulgurante te traverse le crâne. Tu recules d’un bond et tombes à genoux.</p>'}
+        <p>La douleur cesse aussitôt.</p>
+        <p>Tu fixes la vasque. Quelques grains ont glissé sur le bord. Là où ils touchent la pierre, une tache sombre s’étend lentement.</p>
+        <p>Tu aurais plongé la main dedans sans cette brusque injonction qui a arrêté ton geste.</p>
+        <p>Qui vient de t’arrêter ?</p>
+        <p>De l'autre côté de la place, une paroi entière est couverte de gravures monumentales.</p>
+        <p>La dernière figure visible depuis ici porte le symbole de l'œil fermé.</p>
+        <p>Tu traverses la place pour examiner ces scènes.</p>
       `;
     },
-    choices: [
-      { label: 'Toucher ton nom', to: 'c70', effect: s => { s.flags.touchedOwnName = true; } },
-      { label: 'Ne pas le toucher et continuer', to: 'c70' }
-    ]
+    choices: [{ label: 'Examiner les grandes gravures', to: 'c70' }]
   },
 
   c70: {
     number: 'PAGE 70',
-    title: '',
-    image: 'Le dernier Veilleur',
-    text: state => `
-      ${state.flags.touchedOwnName ? `
-        <p>La pierre est tiède sous tes doigts.</p>
-
-        <p>Tu retires aussitôt la main.</p>
-      ` : ''}
-
-      <p>Au bout de la galerie, un squelette est assis contre le mur.</p>
-
-      <p>Une cotte de mailles noircie recouvre encore ses épaules.</p>
-
-      <p>Autour de son cou pend une petite plaque de bronze portant l’œil fermé.</p>
-
-      <p>À côté de lui, une tablette de pierre a glissé au sol.</p>
-
-      <p>Quelques lignes restent lisibles :</p>
-
-      <blockquote>NE PAS LES LAISSER DESCENDRE APRÈS L’APPEL.</blockquote>
-
-      <blockquote>LES CONDUIRE AUX SALLES BLANCHES.</blockquote>
-
-      <blockquote>SI LA TERRE PARAÎT DANS LA BOUCHE OU SOUS LES ONGLES, COMMENCER L’EXTRACTION.</blockquote>
-
-      <p>Tu regardes de nouveau les milliers de noms.</p>
-
-      <p>Les Veilleurs ne se contentaient pas de surveiller la montagne.</p>
-
-      <p>Ils attendaient ceux qu’elle attirait.</p>
-
-      <p>Et ils essayaient de les arrêter avant qu’ils ne descendent plus bas.</p>
+    title: 'Les bâtisseurs',
+    image: 'Les bâtisseurs de la cité',
+    text: `
+      <p>La première scène montre des hommes et des femmes bâtissant les maisons de la cité. Ils portent des blocs, posent des poutres et aménagent les rues.</p>
+      <p>Tu reconnais la place et les façades qui l’entourent. Ce sont leurs ouvrages.</p>
+      <p>Au bord de la gravure, plusieurs routes quittent la cité vers des vallées de surface. L’une semble suivre les collines de Valombre. Tu n’en es pas certain.</p>
+      <p>Plus loin, les bâtisseurs abandonnent leurs outils. Ils se réunissent autour d'une ouverture qui descend sous la cité.</p>
+      <p>Sur les vêtements de certains apparaît un signe que tu connais déjà : <strong>l'œil fermé</strong>.</p>
+      <p>Tu avances vers la scène suivante.</p>
     `,
-    choices: state => hasItem(state, 'plaque_veilleur')
-      ? [{ label: 'Quitter la salle des noms', to: 'c71' }]
-      : [
-          {
-            label: 'Prendre la Plaque du Veilleur',
-            to: 'c71',
-            effect: s => addItem(s, 'plaque_veilleur', 'Plaque du Veilleur', 'Une petite plaque de bronze portant l’œil fermé. Elle appartenait à l’un des Veilleurs qui recensait les personnes attirées sous la montagne.')
-          },
-          { label: 'La laisser', to: 'c71' }
-        ]
+    choices: [{ label: 'Suivre la fresque', to: 'c71' }]
   },
 
   c71: {
     number: 'PAGE 71',
-    title: '',
-    image: 'Les appelés',
+    title: 'La porte scellée',
+    image: 'La construction de la prison',
     text: `
-      <p>Avant de quitter la galerie, tu regardes une dernière fois les murs.</p>
-
-      <p>Tu comprends maintenant ce que représente cette liste.</p>
-
-      <p>Ce ne sont pas les noms des morts.</p>
-
-      <p>Ce sont les noms de ceux qui ont entendu quelque chose.</p>
-
-      <p>De ceux qui ont commencé à venir vers la montagne.</p>
-
-      <p>Les Veilleurs les recensaient, puis tentaient de les conduire vers leurs salles de soin avant qu’ils n’aillent plus loin.</p>
-
-      <p>Gaspard en faisait partie.</p>
-
-      <p>Anselme aussi.</p>
-
-      <p>Aldren également.</p>
-
-      <p>Et désormais, ton nom figure parmi les leurs.</p>
-
-      <p>La question n’est plus seulement de savoir ce qui se trouve sous la montagne.</p>
-
-      <p>Il faut aussi comprendre pourquoi elle connaît déjà ton nom.</p>
+      <p>La gravure suivante montre une forme immense au fond d'une cavité.</p>
+      <p>La pierre a été abîmée à cet endroit. Impossible de savoir ce que les bâtisseurs avaient voulu représenter.</p>
+      <p>Autour de cette forme, les hommes dressent des murs, condamnent des galeries et placent d'énormes blocs au-dessus de la cavité.</p>
+      <p>Dans la dernière scène, ils ferment une porte monumentale. L'œil fermé est gravé au centre de son battant.</p>
+      <p>Les mêmes hommes portent ce symbole sur leurs vêtements.</p>
+      <p><strong>Les premiers Veilleurs ont construit une prison sous la cité.</strong></p>
+      <p>Mais rien, sur cette partie de la fresque, n'explique ce qui les a poussés à enfermer la forme immense.</p>
     `,
-    choices: [{ label: 'Poursuivre dans la cité', to: 'c82' }]
+    choices: [{ label: 'Examiner la suite des gravures', to: 'c72' }]
   },
 
   c72: {
     number: 'PAGE 72',
-    title: 'Le couloir des portes',
-    image: 'Le couloir des portes',
-    text: state => `
-      <p>Les portes sont toutes à taille humaine.</p>
-
-      <p>C’est presque rassurant après les proportions de la cité.</p>
-
-      <p>Entre deux portes, des phrases ont été gravées directement dans la pierre.</p>
-
-      <p>La première est maladroite, comme tracée par une main tremblante :</p>
-
-      <blockquote>J’ENTENDS LÉONIE DEPUIS TROIS NUITS.</blockquote>
-
-      <p>Plus bas :</p>
-
-      <blockquote>JE SAIS QU’ELLE EST MORTE.</blockquote>
-
-      <p>Une autre phrase a été ajoutée plus tard.</p>
-
-      <blockquote>QUAND ELLE M’APPELLE, JE ME LÈVE AVANT MÊME D’AVOIR DÉCIDÉ DE LE FAIRE.</blockquote>
-
-      <p>Tu continues.</p>
-
-      <p>Derrière une porte, une femme murmure un prénom.</p>
-
-      <p>Derrière une autre, un enfant rit.</p>
-
-      <p>Puis, à ta droite :</p>
-
-      <blockquote>« ${escapeHtml(heroName(state))} ? »</blockquote>
-
-      <p>La voix de Sir Aldren.</p>
-
-      <p>Faible. Épuisée.</p>
-
-      <blockquote>« Je suis ici. Ouvre. »</blockquote>
+    title: 'L’appel',
+    noImage: true,
+    image: 'L’appel à travers la pierre',
+    text: `
+      <p>La prison est achevée sur la scène suivante.</p>
+      <p>De longues lignes partent de la forme enfermée. Elles traversent les murs et atteignent la tête de silhouettes éloignées.</p>
+      <p>Sur la gravure d'après, ces personnes quittent leurs maisons. Certaines emportent des outils, d'autres des armes. Elles marchent vers la cité, puis vers la porte scellée.</p>
+      <p>L'une d'elles tient une épée.</p>
+      <p>Tu repenses au parchemin d'Aldren :</p>
+      <blockquote>IL FAUT OUVRIR L’ŒIL FERMÉ.</blockquote>
+      <p>Quelque chose appelle depuis sa prison et cherche à faire venir quelqu'un jusqu'à la porte.</p>
+      <p>Est-ce la même volonté qui t'a repoussé de la vasque ?</p>
+      <p>Et Aldren a-t-il lui aussi suivi cet appel ?</p>
     `,
-    choices: [
-      { label: 'Ouvrir la porte', to: 'c73', effect: s => {
-          const ok = roll3D6(s, 'Dextérité', currentDexterity(s));
-          s.flags.voiceDoorDex = ok ? 'success' : 'fail';
-          if (!ok) s.flags.voiceDoorDamage = applyDamage(s, 2);
-        }
-      },
-      { label: 'Ne pas répondre et continuer', to: 'c75' }
-    ]
+    choices: [{ label: 'Regarder la dernière partie de la fresque', to: 'c73' }]
   },
 
   c73: {
     number: 'PAGE 73',
-    title: '',
-    image: 'La porte d’Aldren',
-    text: state => {
-      const r = diceResultHtml(state);
-      if (state.flags.voiceDoorDex === 'success') {
-        return r + `
-          <p>Tu soulèves le loquet.</p>
-
-          <p>La porte s’ouvre brusquement.</p>
-
-          <p>Ton pied allait avancer lorsque tu aperçois le vide.</p>
-
-          <p>Il n’y a pas de pièce derrière la porte.</p>
-
-          <p>Seulement un puits vertical qui plonge dans l’obscurité.</p>
-
-          <p>Tu recules juste avant que ton poids ne passe le seuil.</p>
-
-          <p>La voix d’Aldren monte d’en bas.</p>
-
-          <blockquote>« Tu m’as trouvé. »</blockquote>
-
-          <p>Le ton n’a pas changé.</p>
-
-          <p>Ni peur. Ni soulagement.</p>
-
-          <p>Seulement cette voix parfaitement reconnaissable.</p>
-        `;
-      }
-      return r + `
-        <p>Tu soulèves le loquet.</p>
-
-        <p>La porte s’ouvre plus vite que prévu.</p>
-
-        <p>Ton pied plonge dans le vide.</p>
-
-        <p>Tu te jettes contre le chambranle et heurtes violemment la pierre avant de parvenir à te retenir.</p>
-
-        ${damageAbsorptionHtml(state.flags.voiceDoorDamage)}
-
-        <p>Sous toi, très loin, la voix d’Aldren continue.</p>
-
-        <blockquote>« Encore un peu. »</blockquote>
-
-        <p>Tu refermes la porte.</p>
-      `;
-    },
-    choices: state => state.hp <= 0 ? fatalChoices() : [{ label: 'T’éloigner de cette porte', to: 'c74' }]
+    title: 'Le seuil',
+    noImage: true,
+    image: 'Les voyageurs au seuil',
+    text: `
+      <p>La dernière scène représente plusieurs voyageurs au pied de la porte.</p>
+      <p>Certains sont étendus sur le sol. Un autre avance encore, une main appuyée contre la pierre. Il tient une lame courte dont la surface a été noircie par le graveur.</p>
+      <p>Le panneau qui aurait montré ce qui vient ensuite a été brisé. Il n'en reste que le bord.</p>
+      <p>Tu sais maintenant que d'autres ont été attirés ici avant toi. La fresque ne dit pas s'ils ont réussi à ouvrir la porte, ni pourquoi tant d'entre eux sont tombés.</p>
+      <p>Tu regardes une dernière fois l'œil fermé.</p>
+      <p>Si quelque chose veut sortir, pourquoi les Veilleurs ont-ils fait tant d'efforts pour l'en empêcher ?</p>
+      <p>La réponse ne figure pas sur cette paroi.</p>
+      <p>Sur ta droite, un passage rejoint les anciennes salles habitées. Deux autres ouvertures s'enfoncent sous les bâtiments.</p>
+    `,
+    choices: [{ label: 'Rejoindre les trois accès', to: 'c74' }]
   },
 
   c74: {
     number: 'PAGE 74',
-    title: '',
-    image: 'Ceux qui ont répondu',
+    title: 'Trois chemins dans la cité',
+    image: 'Le carrefour des Veilleurs',
     text: `
-      <p>Tu t’éloignes de la porte jusqu’à ne plus voir sa poignée.</p>
-
-      <p>Dans une alcôve, tu découvres un paquet de vêtements, une gourde vide et un morceau de charbon.</p>
-
-      <p>Le mur est couvert de phrases courtes.</p>
-
-      <blockquote>ELLE M’A DIT DE VENIR.</blockquote>
-
-      <blockquote>LES VEILLEURS DISENT QUE CE N’EST PAS ELLE.</blockquote>
-
-      <blockquote>JE LE SAIS.</blockquote>
-
-      <blockquote>JE L’ENTENDS QUAND MÊME.</blockquote>
-
-      <p>La dernière phrase est presque effacée à force d’avoir été frottée :</p>
-
-      <blockquote>NOUS NE SOMMES PAS ENLEVÉS. NOUS VENONS.</blockquote>
-
-      <p>Tu restes un instant devant ces mots.</p>
-
-      <p>À Rochebrume, les gens disparaissaient sans que personne sache pourquoi.</p>
-
-      <p>Peut-être qu’aucune force ne les traînait jusqu’ici.</p>
-
-      <p>Peut-être qu’on leur donnait simplement une voix qu’ils ne pouvaient pas se résoudre à abandonner.</p>
+      <p>Tu atteins un carrefour où trois passages s'éloignent de la place.</p>
+      <p>Le premier conduit vers des pièces à taille humaine. Des tables et des bancs sont visibles derrière une porte restée ouverte.</p>
+      <p>Le deuxième est bordé de cellules aux portes épaisses. Une plaque indique : QUARTIER D’OBSERVATION.</p>
+      <p>Le troisième s’enfonce sous une arche de pierre portant l’œil fermé.</p>
+      <p>Tu dois choisir par où continuer.</p>
     `,
-    choices: [{ label: 'Continuer dans le couloir', to: 'c76' }]
+    choices: [
+      { label: 'Explorer les anciens quartiers des Veilleurs', to: 'c75', effect: s => { s.flags.cityRoute = 'quarters'; } },
+      { label: 'Explorer le quartier d’observation', to: 'c92', effect: s => { s.flags.cityRoute = 'observation'; } },
+      { label: 'Passer sous l’arche à l’œil fermé', to: 'c99', effect: s => { s.flags.cityRoute = 'laboratory'; } }
+    ]
   },
 
   c75: {
-    number: 'PAGE 75',
-    title: '',
-    image: 'Ne pas répondre',
+    number: 'PAGE 75', title: 'Les quartiers des Veilleurs', noImage: true, image: 'Le carrefour des quartiers',
     text: state => `
-      <p>Tu continues sans toucher la poignée.</p>
-
-      <blockquote>« ${escapeHtml(heroName(state))}… »</blockquote>
-
-      <p>La voix d’Aldren reste derrière toi.</p>
-
-      <p>Puis elle devient celle d’Élias.</p>
-
-      <p>Plus loin, elle prend le timbre rauque de Gaspard.</p>
-
-      <p>Tu accélères.</p>
-
-      <p>Dans une alcôve, tu aperçois un paquet de vêtements et plusieurs phrases écrites au charbon.</p>
-
-      <blockquote>ELLE M’A DIT DE VENIR.</blockquote>
-
-      <blockquote>LES VEILLEURS DISENT QUE CE N’EST PAS ELLE.</blockquote>
-
-      <blockquote>JE LE SAIS.</blockquote>
-
-      <blockquote>JE L’ENTENDS QUAND MÊME.</blockquote>
-
-      <p>La dernière phrase est plus profonde que les autres :</p>
-
-      <blockquote>NOUS NE SOMMES PAS ENLEVÉS. NOUS VENONS.</blockquote>
-
-      <p>Tu comprends alors quelque chose de simple et de terrible.</p>
-
-      <p>Les disparus ne sont peut-être pas conduits de force jusqu’à la montagne.</p>
-
-      <p>Quelque chose leur donne une raison d’y venir.</p>
-    `,
-    choices: [{ label: 'Atteindre le bout du couloir', to: 'c76' }]
+      <p>Les anciennes salles d'habitation se déploient autour d'un petit vestibule. Une odeur de cendre froide flotte encore dans l'air. Des lampes à huile éteintes sont accrochées aux murs ; les passages restent dans la pénombre.</p>
+      <p>À gauche, des tables sont visibles derrière une arche. À droite, une porte mène à un poste de garde encombré de registres.</p>
+      <p>Au fond, un passage rejoint les pièces du commandement.</p>
+      ${state.flags.quartersRefectory ? '<p>Tu as déjà parcouru le réfectoire.</p>' : ''}
+      ${state.flags.quartersGuard ? '<p>Tu as déjà consulté les premières consignes de garde.</p>' : ''}
+      <p>Aldren est quelque part plus bas. Tu peux aussi ne pas t’attarder.</p>`,
+    choices: s => [
+      ...(!s.flags.quartersRefectory ? [{ label: 'Explorer le réfectoire', to: 'c76' }] : []),
+      ...(!s.flags.quartersGuard ? [{ label: 'Examiner la salle de garde', to: 'c77' }] : []),
+      { label: 'Gagner les bureaux du commandement', to: 'c82' }
+    ]
   },
-
   c76: {
-    number: 'PAGE 76',
-    title: '',
-    image: 'L’avertissement',
+    number: 'PAGE 76', title: 'Le réfectoire', image: 'Le réfectoire des Veilleurs',
     text: `
-      <p>Le couloir se termine sous une arche basse.</p>
-
-      <p>Juste avant de la franchir, tu remarques une inscription plus nette que les autres.</p>
-
-      <blockquote>NE CROIS PAS UNE VOIX QUI CONNAÎT TON NOM AVANT QUE TU LE LUI AIES DONNÉ.</blockquote>
-
-      <p>Tu relis la phrase.</p>
-
-      <p>Les fragments s’assemblent.</p>
-
-      <p>Quelque chose sous la montagne apprend les noms, les voix et les souvenirs de ceux qu’il atteint.</p>
-
-      <p>Puis il s’en sert pour les attirer.</p>
-
-      <p>Les disparus de Rochebrume n’ont peut-être jamais été poursuivis.</p>
-
-      <p>Ils ont entendu quelqu’un qu’ils voulaient retrouver.</p>
-
-      <p>Ou quelqu’un qu’ils croyaient pouvoir sauver.</p>
-
-      <p>Et ils ont suivi la voix.</p>
-
-      <p>Tu penses à Aldren.</p>
-
-      <p>S’il t’appelle plus bas, il faudra d’abord t’assurer que c’est bien lui.</p>
-    `,
-    choices: [{ label: 'Franchir l’arche', to: 'c82' }]
+      <p>De longues tables occupent la salle. Des bols d'argile sont alignés près d'une cheminée éteinte. Des manteaux pendent à des crochets.</p>
+      <p>Sur un mur, quelqu'un a dessiné des maisons, des champs et des familles réunies autour d'un foyer.</p>
+      <p>Sous le dessin, une devise est gravée :</p>
+      <blockquote>QUE NOTRE VEILLE PRÉSERVE CEUX QUI VIVENT AU-DESSUS.</blockquote>
+      <p>Les Veilleurs mangeaient et dormaient ici. Ils avaient des proches à la surface, tout comme toi.</p>
+      <p>Tu retournes vers les autres salles.</p>`,
+    choices: [{ label: 'Revenir au vestibule', to: 'c75', effect: s => { s.flags.quartersRefectory = true; } }]
   },
-
   c77: {
-    number: 'PAGE 77',
-    title: 'Le laboratoire des Veilleurs',
-    image: 'L’arche blanche',
+    number: 'PAGE 77', title: 'Les consignes de garde', image: 'Le poste de garde',
     text: `
-      <p>La lumière vient de petites plaques pâles incrustées dans les murs.</p>
-
-      <p>Le passage débouche dans une grande salle.</p>
-
-      <p>Des tables de pierre sont alignées contre les parois.</p>
-
-      <p>Des sangles desséchées pendent encore à certaines.</p>
-
-      <p>Au-dessus, de longs bras articulés portent des aiguilles de pierre.</p>
-
-      <p>Tu penses d’abord à une salle de torture.</p>
-
-      <p>Puis tu remarques les bassins, les rigoles et les récipients soigneusement rangés.</p>
-
-      <p>Sur plusieurs tables, les sangles sont accompagnées de coussins de cuir pour maintenir la tête et les épaules.</p>
-
-      <p>Dans une cuve fermée, une matière noire a séché en une couche épaisse.</p>
-
-      <p>Le même dépôt apparaît au bout de certaines aiguilles.</p>
-
-      <p>Ce lieu n’a pas été construit pour faire souffrir.</p>
-
-      <p>Les Veilleurs cherchaient à retirer quelque chose du corps de ceux qu’ils attachaient ici.</p>
-    `,
-    choices: [{ label: 'Examiner les appareils', to: 'c78' }]
+      <p>Un plan des galeries couvre le mur du poste. Sur un pupitre, les premiers registres parlent de rondes, de réserves et de surveillance des accès.</p>
+      <p>Puis viennent des consignes concernant ceux qui entendent l'appel :</p>
+      <blockquote>ÉVITER LA TERRE NOIRE. CONDUIRE LES PERSONNES ATTEINTES AUX SALLES DE SOINS.</blockquote>
+      <p>Plus loin, une autre main ordonne d'isoler toute personne attirée vers la prison.</p>
+      <p>D'autres manuscrits remplissent une étagère. Les lire te prendrait du temps. Aldren est encore introuvable.</p>`,
+    choices: [
+      { label: 'Rester et examiner les autres manuscrits', to: 'c78', effect: s => { s.flags.quartersGuard = true; s.flags.guardStayed = true; } },
+      { label: 'Ne pas perdre de temps et rejoindre les bureaux', to: 'c82', effect: s => { s.flags.quartersGuard = true; } },
+      { label: 'Revenir explorer les autres salles', to: 'c75', effect: s => { s.flags.quartersGuard = true; } }
+    ]
   },
-
   c78: {
-    number: 'PAGE 78',
-    title: '',
-    image: 'Les aiguilles de pierre',
+    number: 'PAGE 78', title: 'Les derniers manuscrits', image: 'Les registres oubliés',
     text: `
-      <p>Tu t’approches d’une des tables.</p>
-
-      <p>Les aiguilles convergent vers les bras, la poitrine et la gorge.</p>
-
-      <p>Au bout de chacune, une matière noire a séché en croûtes très fines.</p>
-
-      <p>Dans un renfoncement du mur, plusieurs ampoules de verre sont rangées dans une boîte de pierre.</p>
-
-      <p>Presque toutes sont brisées.</p>
-
-      <p>Une seule paraît intacte.</p>
-
-      <p>Un liquide blanc et trouble remplit encore son fond.</p>
-
-      <p>Tu avances la main.</p>
-
-      <p>La dalle sous ta botte s’abaisse de quelques millimètres.</p>
-
-      <p>Un déclic sec répond dans le mur.</p>
-
-      <p>Un mécanisme ancien se réveille.</p>
-
-      <p>Un bras de pierre pivote vers toi.</p>
-    `,
-    choices: [{
-      label: 'Éviter le bras — lancer les trois dés de Dextérité',
-      to: 'c79',
-      effect: s => {
-        const ok = roll3D6(s, 'Dextérité', currentDexterity(s));
-        s.flags.labTrap = ok ? 'success' : 'fail';
-        if (!ok) s.flags.labTrapDamage = applyDamage(s, 2);
-      }
-    }]
+      <p>Tu ouvres un registre relié de cuir noir. Deux gardes y sont décrits après avoir reçu volontairement de la terre noire.</p>
+      <blockquote>ILS NE RÉPONDENT PLUS À L'APPEL. LEURS ORDRES DE GARDE RESTENT MAL COMPRIS.</blockquote>
+      <p>Une note plus récente indique qu'ils ont été enfermés près du poste. Leurs corps se sont déformés, mais ils réagissent encore au moindre mouvement.</p>
+      <p>Tu tournes une autre page.</p>
+      <p>Un grattement vient de la porte, derrière toi.</p>
+      <p>Puis un second.</p>
+      <p>La poignée s'abaisse.</p>`,
+    choices: [{ label: 'Dégainer et faire face', to: 'c79' }]
   },
-
   c79: {
-    number: 'PAGE 79',
-    title: '',
-    image: 'Le bras de pierre',
-    text: state => {
-      const r = diceResultHtml(state);
-      if (state.flags.labTrap === 'success') {
-        return r + `
-          <p>Tu te jettes de côté.</p>
-
-          <p>L’aiguille traverse l’endroit où se trouvait ta gorge et s’arrête dans un claquement sec.</p>
-
-          <p>Le mécanisme essaie de revenir à sa position initiale, puis se bloque.</p>
-
-          <p>Après quelques secondes, le silence revient.</p>
-        `;
-      }
-      return r + `
-        <p>Tu recules trop tard.</p>
-
-        <p>Le bras de pierre te frappe à l’épaule et t’écrase contre le bord de la table.</p>
-
-        ${damageAbsorptionHtml(state.flags.labTrapDamage)}
-
-        <p>L’aiguille passe à quelques doigts de ton cou.</p>
-
-        <p>Le mécanisme grince encore une fois puis s’immobilise.</p>
-      `;
+    number: 'PAGE 79', title: 'Les deux sentinelles', image: 'Les sentinelles contaminées',
+    text: s => `
+      <p>Deux silhouettes entrent dans le poste de garde. Elles portent les restes d'un uniforme.</p>
+      <p>Leurs traits demeurent presque humains. Une terre noire et épaisse coule de leurs bouches.</p>
+      <p>L'une avance devant toi. L'autre contourne le pupitre.</p>
+      <p>Tu dois affronter les deux. Tu ne peux en attaquer qu'une à la fois ; chacune peut te frapper tant qu'elle tient debout.</p>
+      ${sentinelCardsHtml(s)}`,
+    choices: s => sentinelChoices(s)
+  },
+  c80: {
+    number: 'PAGE 80', title: 'Deux contre un', image: 'Le combat dans le poste de garde',
+    text: s => `
+      <p>Les deux sentinelles te pressent dans l'espace étroit du poste de garde.</p>
+      ${sentinelCardsHtml(s)}
+      ${s.flags.sentinelResultAcknowledged ? "" : sentinelResultHtml(s)}
+      ${(s.sentinelFight && s.sentinelFight.hp.every(h => h <= 0)) ? '<p>Les deux gardiens sont tombés. Le silence revient. Une porte ouverte au fond du poste conduit à l’ancienne armurerie.</p>' : ''}`,
+    choices: s => s.hp <= 0 ? fatalChoices() : (s.sentinelFight && s.sentinelFight.hp.every(h => h <= 0))
+      ? [{ label: 'Fouiller l’armurerie', to: 'c81' }]
+      : sentinelChoices(s)
+  },
+  c81: {
+    number: 'PAGE 81', title: 'L’armurerie', image: 'La réserve d’armes',
+    text: `
+      <p>Des râteliers longent les murs. Les épées et les casques qu'ils supportent sont rongés par la rouille.</p>
+      <p>Dans une boîte restée fermée, tu trouves cinq petites lames de jet encore en état de servir.</p>
+      <p>Tu peux les emporter. Aucun autre équipement ne paraît sûr.</p>`,
+    choices: s => s.flags.armoryLooted ? [{ label: 'Rejoindre les bureaux', to: 'c82' }] : [
+      { label: 'Prendre les cinq lames de jet', to: 'c136', effect: s => { if (!s.flags.armoryLooted) { s.throwingBlades += 5; syncThrowingBlades(s); s.flags.armoryLooted = true; } } },
+      { label: 'Laisser les lames et rejoindre les bureaux', to: 'c82', effect: s => { s.flags.armoryLooted = true; } }
+    ]
+  },
+  c82: {
+    number: 'PAGE 82', title: 'Le bureau fermé', noImage: true, image: 'La porte du commandement',
+    text: `
+      <p>Une porte renforcée ferme le bureau du commandement. Sa serrure ne répond plus. Au-delà, un passage permet de rejoindre les appartements sans y entrer.</p>
+      <p>Des marques de coups autour du verrou montrent que quelqu'un a déjà essayé de forcer l'entrée.</p>
+      <p>Tu peux tenter ta chance, ou poursuivre les recherches d'Aldren.</p>`,
+    choices: s => s.flags.officeAttempted
+      ? [{ label: 'Poursuivre vers les appartements', to: 'c84' }]
+      : [
+          { label: 'Tenter d’enfoncer la porte — épreuve de Force', to: 'c83', effect: s => { s.flags.officeAttempted = true; s.flags.officeOpened = roll3D6(s, 'Force', currentForce(s)); } },
+          { label: 'Laisser la porte et gagner les appartements', to: 'c84' }
+        ]
+  },
+  c83: {
+    number: 'PAGE 83', title: 'Les ordres du commandement', noImage: true, image: 'Le bureau des ordres',
+    text: s => s.flags.officeOpened || s.visited?.c83 && !s.flags.officeAttempted ? `
+      ${s.flags.officeAttempted ? diceResultHtml(s) : ''}
+      <p>La porte cède. Des tablettes et des registres sont restés ouverts sur un pupitre.</p>
+      <p>Les premières instructions prévoient d'isoler les personnes contaminées et de chercher des soins. Les suivantes ont changé de ton :</p>
+      <blockquote>AU PREMIER SOUPÇON, EXÉCUTER.</blockquote>
+      <p>Plusieurs condamnations portent une seule justification : « Soupçon ».</p>
+      <p>Dans la marge, une autre main a écrit : « Et si nous nous trompions ? » La phrase a été rayée jusqu'à creuser la pierre.</p>` : `
+      ${diceResultHtml(s)}
+      <p>Tu pousses de toutes tes forces. La serrure grince, mais la porte tient bon.</p>
+      <p>Tu renonces à t'acharner et rejoins le passage des appartements.</p>`,
+    choices: [{ label: 'Rejoindre les appartements', to: 'c84' }]
+  },
+  c84: {
+    number: 'PAGE 84', title: 'Les derniers jours', image: 'Les appartements désertés',
+    text: `
+      <p>Les lits sont renversés. Des vêtements gisent dans les couloirs. Un coup de hache a entaillé une porte.</p>
+      <p>Dans une chambre, deux rapports datés du même jour se contredisent.</p>
+      <p>L'un exige l'élimination de tous ceux qui refusent les condamnations. L'autre réclame des preuves avant de tuer, et la poursuite des soins.</p>
+      <p>Au bas de ce second rapport : « Arrêté pour refus d'obéir. »</p>
+      <p>Les Veilleurs avaient commencé par protéger les habitants. Ils ont fini par se retourner contre les leurs.</p>
+      <p>Tu traverses les appartements vers la sortie.</p>`,
+    choices: [{ label: 'Gagner la galerie de sortie', to: 'c85' }]
+  },
+  c85: {
+    number: 'PAGE 85', title: 'La fissure des appartements', noImage: true, image: 'La fissure derrière l’armoire',
+    text: `
+      <p>Tu t'apprêtes à quitter les appartements lorsqu'un grattement résonne derrière le mur.</p>
+      <p>Une fissure étroite traverse la pierre, presque dissimulée par une armoire renversée.</p>
+      <p>Tu ignores où cette faille mène. Le grattement pourrait venir de très loin derrière la paroi.</p>
+      <p>L'ouverture paraît juste assez large pour t'y glisser de profil. La sortie des quartiers est derrière toi.</p>`,
+    choices: [
+      { label: 'T’aventurer dans la fissure', to: 'c86' },
+      { label: 'Quitter les quartiers et poursuivre ta route', to: 'c91' }
+    ]
+  },
+  c86: {
+    number: 'PAGE 86', title: 'Entre les parois', noImage: true, image: 'Le passage trop étroit',
+    text: `
+      <p>Tu progresses de profil. La roche frotte contre tes épaules et tu dois parfois tourner la tête pour avancer.</p>
+      <p>Après plusieurs mètres, l'ouverture s'élargit.</p>
+      <p>Tu débouches dans une pièce presque noire. Une lourde porte de fer occupe le mur opposé. Des barres semblent la bloquer de l'extérieur.</p>
+      <p>Tes yeux s'habituent lentement à l'obscurité.</p>`,
+    choices: [{ label: 'Examiner la pièce', to: 'c87' }]
+  },
+  c87: {
+    number: 'PAGE 87', title: 'La chambre condamnée', image: 'La salle d’isolement',
+    text: `
+      <p>Des corps sont étendus sur le sol, vêtus de lambeaux d'uniformes ou d'habits de voyageurs.</p>
+      <p>Une inscription à moitié effacée est gravée près de la porte :</p>
+      <blockquote>« Salle d’ISOLEMENT »</blockquote>
+      <p>Un grattement retentit.</p>
+      <p>Une main se soulève. L'un des corps essaie lentement de se redresser. De la poussière noire s'échappe de sa bouche.</p>
+      <p>Tu ne sais pas s'il cherche à t'atteindre ou simplement à se lever.</p>`,
+    choices: [
+      { label: 'Fuir par la fissure', to: 'c91', effect: s => { s.flags.isolationChoice = 'flee'; } },
+      { label: 'Frapper avant qu’il se relève', to: 'c88', effect: s => { s.flags.isolationChoice = 'strike'; } }
+    ]
+  },
+  c88: {
+    number: 'PAGE 88', title: 'Le collier du prisonnier', noImage: true, image: 'Le collier de vitalité',
+    text: `
+      <p>Tu frappes d'un seul coup, sans laisser à l'homme le temps de se redresser.</p>
+      <p>Sa tête roule sur les dalles. Le corps retombe.</p>
+      <p>Un collier glisse de son cou. Son pendentif porte un emblème que tu as déjà vu sur certains bijoux de chevaliers : on leur prête le pouvoir de fortifier la vie.</p>
+      <p>Une poussière noire s'est déposée autour du fermoir.</p>
+      <p>Autour de toi, plusieurs corps commencent à remuer. Il faut partir.</p>`,
+    choices: [
+      { label: 'Prendre le collier et le passer autour de ton cou', to: 'c89' },
+      { label: 'Laisser le collier et fuir', to: 'c90' }
+    ]
+  },
+  c89: {
+    number: 'PAGE 89', title: 'Le métal sous la peau', image: 'Le collier incrusté',
+    onEnter: s => equipVeilleurCollar(s),
+    text: s => `
+      <p>Tu passes le collier autour de ton cou.</p>
+      <p>Un regain de vitalité te traverse. Puis le métal se resserre. Ses bords s'enfoncent dans ta peau. La poussière noire accumulée au fermoir pénètre dans la blessure.</p>
+      <p>Tu essaies de le soulever : il est incrusté dans la chair. L'arracher te blesserait gravement.</p>
+      <p>Une raideur gagne tes épaules et tes mouvements perdent en précision.</p>
+      <p><strong>Vie actuelle et maximale : +3. Dextérité : −1. Contamination : +1.</strong></p>
+      <p>Le collier apparaît dans ton inventaire. Tu pourras tenter de l'arracher à tout moment, mais la blessure te coûtera encore un point de Vie en plus des trois points gagnés.</p>
+      <p>Les autres corps remuent. Tu dois quitter la salle.</p>`,
+    choices: [{ label: 'Fuir par la fissure', to: 'c91' }]
+  },
+  c90: {
+    number: 'PAGE 90', title: 'La fuite', noImage: true, image: 'Les corps qui remuent',
+    text: `
+      <p>Tu recules vers la fissure.</p>
+      <p>Derrière toi, plusieurs corps commencent à bouger. Une main racle les dalles.</p>
+      <p>Tu t'engages de profil entre les parois et avances aussi vite que l'étroitesse du passage te le permet.</p>
+      <p>La lumière de la galerie réapparaît enfin.</p>`,
+    choices: [{ label: 'Quitter les anciens quartiers', to: 'c91' }]
+  },
+  c91: {
+    number: 'PAGE 91', title: 'Quitter les quartiers', noImage: true, image: 'La galerie de service',
+    text: s => `
+      <p>Tu retrouves la galerie de sortie des appartements.</p>
+      ${s.flags.isolationChoice === 'flee' ? '<p>Le grattement de la chambre d’isolement s’est tu derrière les parois.</p>' : ''}
+      ${s.flags.collarEquipped ? '<p>Le collier tire sur ta peau chaque fois que tu tournes la tête.</p>' : ''}
+      <p>Les Veilleurs vivaient, soignaient, condamnaient et enfermaient ici. Tu ignores encore ce qu’ils tentaient réellement d’empêcher.</p>
+      <p>La galerie rejoint une salle ronde où convergent deux autres passages.</p>`,
+    choices: [{ label: 'Entrer dans la salle ronde', to: 'c104' }]
+  },
+  c92: {
+    number: 'PAGE 92', title: 'Le quartier d’observation', image: 'Le quartier d’observation',
+    text: `
+      <p>Un couloir étroit dessert des cellules. Certaines portes possèdent une ouverture à hauteur de visage. À travers celles-ci, tu aperçois une table, une chaise, parfois un cahier abandonné.</p>
+      <p>L’une des portes est rayée de marques irrégulières. Un bruit léger vient de l’intérieur, suivi d’un raclement.</p>
+      <p>Au bout du couloir, une arche permet de rejoindre la salle où convergent les trois chemins.</p>`,
+    choices: [
+      { label: 'T’approcher de la cellule d’où vient le bruit', to: 'c93' },
+      { label: 'Garder tes distances et rejoindre la salle ronde', to: 'c98' }
+    ]
+  },
+  c93: {
+    number: 'PAGE 93', title: 'L’homme derrière la porte', image: 'Le dernier prisonnier',
+    onEnter: s => { s.flags.observationMet = true; },
+    text: `
+      <p>La porte possède une ouverture à hauteur de visage. À travers cette ouverture, tu regardes à l’intérieur.</p>
+      <p>Un homme en armure est assis à l’intérieur. Son visage reste dans l’ombre. Sous la table, une masse déformée heurte lentement les dalles.</p>
+      <blockquote>« Aidez-moi… »</blockquote>
+      <blockquote>« Je suis chevalier… Je suis arrivé ici il y a quelques jours. »</blockquote>
+      <p>Il se rapproche de la porte et s’y agrippe.</p>
+      <blockquote>« Vous pouvez m’aider ? Je vous en prie… »</blockquote>
+      <p>Un ancien carnet médical est ouvert près de lui.</p>`,
+    choices: [
+      { label: 'Hésiter et lui demander de raconter son histoire', to: 'c94' },
+      { label: 'Ne pas lui faire confiance et partir', to: 'c149', effect: t => { t.flags.knightFate = 'hostile'; } }
+    ]
+  },
+  c94: {
+    number: 'PAGE 94', title: '', noImage: true, image: 'Le cahier du prisonnier',
+    onEnter: s => { s.flags.observationRecordsHeard = true; s.flags.observationBodyHeard = true; s.flags.observationRead = true; },
+    text: `
+      <blockquote>« Je viens d’un village au-delà de la vallée. Une voix m’appelait. Elle me demandait de la libérer. J’ai toujours répondu aux appels à l’aide. »</blockquote>
+      <blockquote>« Mais une fois arrivé ici, j’ai compris que quelque chose n’allait pas. Cet appel… c’est une malédiction. »</blockquote>
+      <p>Il pose une main tremblante sur le carnet ouvert près de lui.</p>
+      <blockquote>« J’ai trouvé ce carnet des Veilleurs. Ils étudiaient les voyageurs qui entendaient la voix. Ils notaient leurs gestes, leurs tentatives pour rejoindre la prison… Puis ils ont essayé la terre noire. »</blockquote>
+      <p>Il te montre une ligne soulignée : l’emprise diminuait après l’injection, puis revenait.</p>
+      <blockquote>« J’ai trouvé leurs aiguilles et leur réserve. J’ai cru pouvoir reprendre ma route. Je me suis injecté une première dose. J’ai repris le contrôle de mes gestes… pour un temps. Quand l’appel est revenu, j’ai recommencé. Encore et encore. »</blockquote>
+      <p>Il soulève un pan de sa tunique. Ses jambes ont perdu leur forme humaine. Une masse sombre et noueuse les relie désormais au sol. Ses membres inférieurs raclent la pierre sans lui obéir.</p>
+      <blockquote>« J’ai fermé cette porte avant de ne plus pouvoir me contrôler. Je ne veux pas finir comme eux… »</blockquote>`,
+    choices: [{ label: 'Lui demander comment l’aider', to: 'c96' }]
+  },
+  c95: {
+    number: 'PAGE 95', title: '', noImage: true, image: 'Les jambes du chevalier',
+    onEnter: s => { s.flags.observationBodyHeard = true; s.flags.observationRecordsHeard = true; s.flags.observationRead = true; },
+    text: `
+      <p>Il soulève un pan de sa tunique. Ses jambes ont perdu leur forme humaine. Une masse sombre et noueuse les relie désormais au sol.</p>
+      <blockquote>« J’ai compris, grâce aux carnets des Veilleurs, que la terre noire pouvait étouffer l’appel. Je me suis injecté une première dose. J’ai repris le contrôle de mes gestes… pour un temps. Quand l’appel est revenu, j’ai recommencé. Encore et encore. »</blockquote>
+      <blockquote>« J’ai fermé cette porte avant de ne plus pouvoir me contrôler. Je ne veux pas finir comme eux… »</blockquote>`,
+    choices: [{ label: 'Lui demander comment l’aider', to: 'c96' }]
+  },
+  c96: {
+    number: 'PAGE 96', title: '', noImage: true, image: 'La dernière ampoule vide',
+    onEnter: s => { s.flags.observationRead = true; },
+    text: `
+      <p>Près de sa chaise, une ampoule blanche vide roule entre les pierres.</p>
+      <blockquote>« J’ai essayé leur remède aussi. La matière reculait… mais l’appel revenait. Je n’ai plus rien. »</blockquote>
+      <p>Il fixe la porte. Ses jambes remuent avec un bruit sourd.</p>
+      <blockquote>« Sortez-moi d’ici. Trouvez quelqu’un qui puisse me sauver… Ou entrez et achevez-moi. Mais ne me laissez pas comme ça. »</blockquote>`,
+    choices: [
+      { label: 'Entrer dans la cellule pour l’achever', to: 'c97' },
+      { label: 'Ouvrir la porte et le libérer', to: 'c137', effect: s => { s.flags.knightFate = 'freed'; } },
+      { label: 'Le laisser enfermé et poursuivre ton chemin', to: 'c144', effect: s => { s.flags.knightFate = 'locked'; } }
+    ]
+  },
+  c97: {
+    number: 'PAGE 97', title: '', image: 'Le combat dans la cellule',
+    text: s => {
+      const enemy = ENEMIES.observationPrisoner;
+      const combat = combatState(s, 'observationPrisoner', enemy);
+      const card = enemyCardHtml(s, 'observationPrisoner', enemy);
+      const result = combat.lastBlade ? throwingBladeResultHtml(s, 'observationPrisoner', enemy) : combatRoundHtml(s, 'observationPrisoner', enemy);
+      if (combat.hp <= 0) return `${card}${result}<p>Le chevalier s’effondre contre la table. Ses membres déformés cessent de remuer. Tu as tenu ta promesse.</p><p>Un petit bouclier repose contre le pied de la table.</p>`;
+      if (s.hp <= 0) return `${card}${result}<p>Pris au piège dans la cellule, tu t’écroules sous ses coups.</p>`;
+      if (!combat.last && !combat.lastBlade) return `<p>Tu soulèves le loquet et entres, l’épée prête.</p><p>« Merci… » souffle-t-il. Puis le bas de son corps se tord, s’arrache au sol et se propulse vers toi. Ses mains cherchent ton arme.</p><p>Tu dois te défendre dans la cellule étroite.</p>${card}`;
+      return `${card}${result}<p>Il se débat encore. Tu ne peux pas reculer sans lui tourner le dos.</p>`;
     },
-    choices: state => state.hp <= 0 ? fatalChoices() : [{ label: 'Prendre l’ampoule', to: 'c80' }]
+    choices: s => {
+      const combat = combatState(s, 'observationPrisoner', ENEMIES.observationPrisoner);
+      if (s.hp <= 0) return fatalChoices();
+      if (combat.hp <= 0) return [
+        { label: 'Examiner le bouclier du chevalier', to: 'c145', effect: t => { t.flags.knightFate = 'dead'; } },
+        { label: 'Quitter la cellule sans rien prendre', to: 'c98', effect: t => { t.flags.knightFate = 'dead'; } }
+      ];
+      return combatActionChoices(s, 'observationPrisoner', ENEMIES.observationPrisoner, 'c97');
+    }
+  },
+  c98: {
+    number: 'PAGE 98', title: 'La sortie du quartier', image: 'La fuite du quartier d’observation',
+    text: s => {
+      const fate = s.flags.knightFate;
+      if (fate === 'dead') return `<p>Tu t’éloignes de la cellule. Le couloir est désormais silencieux.</p><p>Au-delà de l’arche, trois chemins se rejoignent dans une salle ronde.</p>`;
+      if (fate === 'freed') return `<p>Tu t’éloignes de la cellule ouverte. Le chevalier est derrière toi ; ses remerciements se sont tus.</p><p>Tu rejoins la salle ronde par l’arche.</p>`;
+      if (fate === 'locked') return `<p>Tu laisses la porte fermée derrière toi. Les supplications du chevalier se perdent dans le couloir.</p><p>Au-delà de l’arche, trois chemins se rejoignent dans une salle ronde.</p>`;
+      return `<p>Tu évites la cellule d’où proviennent les bruits et franchis l’arche.</p><p>Tu débouches dans une salle ronde où convergent trois chemins.</p>`;
+    },
+    choices: [{ label: 'Rejoindre la salle ronde', to: 'c104' }]
+  },
+  c99: {
+    number: 'PAGE 99', title: 'Le laboratoire des Veilleurs', image: 'Le dispensaire',
+    text: `
+      <p>Dans la pénombre, tu distingues des lits étroits et une cheminée éteinte. Des niches vides sont creusées dans les murs.</p>
+      <blockquote>QUE NUL NE SOIT LIVRÉ À L'APPEL SANS SECOURS.</blockquote>
+      <p>Les premiers carnets décrivent des voyageurs accueillis pour empêcher qu’ils ne descendent vers la prison. Les Veilleurs ont tenté d’apaiser cette emprise, sans résultat durable.</p>
+      <p>Dans la salle suivante, des tables à sangles entourent une cuve de terre noire. Les conduits aboutissent à des aiguilles dirigées vers les corps.</p>
+      <p>Au fond, un dispositif d'injection possède encore un levier mobile.</p>`,
+    choices: [
+      { label: 'Examiner le mécanisme d’injection', to: 'c100' },
+      { label: 'Laisser la machine et examiner les ampoules', to: 'c102' }
+    ]
+  },
+  c100: {
+    number: 'PAGE 100', title: 'La machine d’injection', image: 'Les aiguilles des Veilleurs',
+    text: `
+      <p>Sur la table, des schémas représentent un crâne traversé de lignes semblables à celles de la fresque de l'appel.</p>
+      <blockquote>LE SUJET PEUT À NOUVEAU RETENIR SES GESTES.</blockquote>
+      <blockquote>L’EMPRISE A REPRIS AU TROISIÈME JOUR.</blockquote>
+      <p>Le réservoir de cette machine contient encore de la terre noire. Ses conduits sont faits pour l'injecter.</p>
+      <p>Tu actionnes avec prudence le levier encore mobile.</p>
+      <p>Le bras s'abaisse plus vite que prévu. L'aiguille se dirige vers ton épaule.</p>`,
+    choices: [{ label: 'Esquiver l’aiguille — épreuve de Dextérité', to: 'c101', effect: s => { s.flags.injectionDodged = roll3D6(s, 'Dextérité', currentDexterity(s)); if (!s.flags.injectionDodged) injectBlackEarth(s); } }]
+  },
+  c101: {
+    number: 'PAGE 101', title: 'La terre sous la peau', image: 'L’injection',
+    text: s => `
+      ${diceResultHtml(s)}
+      ${s.flags.injectionDodged
+        ? '<p>Tu te jettes sur le côté. L’aiguille frappe la table et le mécanisme se bloque.</p><p>Tu comprends comment les Veilleurs injectaient la matière aux personnes sanglées, sans en subir les effets.</p>'
+        : '<p>L’aiguille s’enfonce dans ton bras. Une brûlure remonte jusqu’à l’épaule.</p><p>Tu te dégages et recules. Tes muscles se contractent : une force nouvelle les parcourt.</p><p>Pendant quelques secondes, tu ne sais plus où tu es. Tes gestes perdent en précision.</p><p><strong>+2 Force, −1 Dextérité. Terre noire : contamination accrue.</strong> Ces effets durent tant que l’injection n’a pas été traitée.</p>'}
+      <p>Une boîte d'ampoules blanches est restée sur une étagère, derrière la machine.</p>`,
+    choices: [{ label: 'Examiner les ampoules', to: 'c102' }]
+  },
+  c102: {
+    number: 'PAGE 102', title: 'L’ampoule blanche', image: 'L’ampoule blanche',
+    text: `
+      <p>Une seule ampoule a résisté au temps. Son liquide blanc a été mis au point pour réduire la contamination.</p>
+      <p>Une annotation décrit un traitement qui réduit la contamination, sans soigner les blessures. L’emprise de la chose enfermée peut alors reprendre de la force.</p>
+      <p>Tu peux l'emporter ou la laisser. Des registres attendent plus loin.</p>`,
+    choices: s => hasItem(s, 'ampoule_blanche')
+      ? [{ label: 'Consulter les derniers registres', to: 'c103' }]
+      : [
+          { label: 'Prendre l’Ampoule blanche', to: 'c138', effect: s => addItem(s, 'ampoule_blanche', 'Ampoule blanche', 'Terre noire : −4 points de contamination (minimum 0). Ne soigne pas les blessures.') },
+          { label: 'Laisser l’ampoule et lire les registres', to: 'c103' }
+        ]
+  },
+  c103: {
+    number: 'PAGE 103', title: 'La fabrication des gardiens', image: 'Le registre des expériences',
+    text: `
+      <p>Les derniers registres ne parlent plus de guérison. Ils décrivent l'exposition volontaire de personnes appelées à la terre noire.</p>
+      <blockquote>SUJET 17 : DÉCÈS.</blockquote>
+      <blockquote>SUJET 18 : DÉCÈS.</blockquote>
+      <blockquote>SUJET 19 : TRANSFORMATION. NE RÉPOND PLUS À L'APPEL.</blockquote>
+      <blockquote>SUJET 20 : TRANSFORMATION. OBÉIT AUX SIGNAUX DE GARDE.</blockquote>
+      <p>Dans la marge, quelqu'un a écrit : « Ce sont encore des hommes. » Une autre main a répondu : « Plus pour longtemps. »</p>
+      <p>Ont-ils empêché une catastrophe, ou en ont-ils créé une autre ? Tu ne le sais pas.</p>
+      <p>Une porte donne sur une salle ronde où convergent les autres itinéraires.</p>`,
+    choices: [{ label: 'Quitter le laboratoire', to: 'c104' }]
+  },
+  c104: {
+    number: 'PAGE 104',
+    title: 'Les défenses du sceau',
+    image: 'Le mécanisme des gardiens',
+    text: `
+      <p>Les trois chemins débouchent dans une salle ronde.</p>
+      <p>Au centre, une table de pierre porte un plan gravé de la grotte. Plusieurs chemins mènent vers la surface. Ils sont barrés d'un trait profond, comme si les Veilleurs en avaient condamné les accès.</p>
+      <p>Ont-ils été fermés pour protéger la vallée ? Leur fermeture a-t-elle participé à son déclin ?</p>
+      <p>Plus bas sur le plan, une porte monumentale est dessinée. À côté, une inscription :</p>
+      <blockquote>LA TERRE NOIRE ENTRETIENT LE SCEAU. NE PAS LA TOUCHER.</blockquote>
+      <p>Sur un panneau voisin, des silhouettes s'effondrent au contact d'une matière sombre. D'autres restent debout, le corps déformé.</p>
+      <p>Près d'un passage vers les niveaux inférieurs, une petite lame noire est dessinée.</p>
+    `,
+    choices: [{ label: 'Consulter les registres médicaux', to: 'c105' }]
   },
 
-  c80: {
-    number: 'PAGE 80',
-    title: '',
-    image: 'L’ampoule blanche',
-    text: `
-      <p>Le verre est froid.</p>
+  c118: {
+    number: 'PAGE 118', title: "La fiole emportée", noImage: true,
+    text: `<p>Tu glisses la fiole rouge dans ta sacoche. Tu ignores encore ce qu’elle contient.</p><p>Tu rejoins la place du village.</p>`,
+    choices: [{label: "Rejoindre la place", to: 'c3'}]
+  },
 
-      <p>Le liquide blanc ne remplit qu’un tiers de l’ampoule.</p>
+  c119: {
+    number: 'PAGE 119', title: "La fiole emportée", noImage: true,
+    text: `<p>Tu protèges la fiole au fond de ta sacoche et quittes Valombre sans attendre.</p><p>Le sentier de la montagne t’attend.</p>`,
+    choices: [{label: "Prendre le sentier de la grotte", to: 'c8'}]
+  },
 
-      <p>Lorsque tu la retournes, il s’écoule lentement sur la paroi intérieure.</p>
+  c120: {
+    number: 'PAGE 120', title: "La potion du marchand", noImage: true,
+    text: `<p>Tu poses les trois pièces sur l’étal. Le marchand te remet la potion, que tu ranges soigneusement pour la suite du voyage.</p>`,
+    choices: [{label: "Retourner sur la place", to: 'c3'}]
+  },
 
-      <p>Aucune inscription.</p>
+  c121: {
+    number: 'PAGE 121', title: "L’épée de la forgeronne", noImage: true,
+    text: `<p>Tu rends l’épée lourde à la forgeronne et essaies quelques mouvements avec la lame plus courte. Ton bras retrouve de la liberté, même si l’arme frappera moins fort.</p><p>Tu la remercies et ressors sur la place.</p>`,
+    choices: [{label: "Retourner sur la place", to: 'c3'}]
+  },
 
-      <p>Seulement l’œil fermé, gravé si finement qu’il faut incliner le verre pour le voir.</p>
+  c122: {
+    number: 'PAGE 122', title: "Une lame contre la masse", noImage: true,
+    text: `<p>Tu lances une lame vers la masse. La pointe disparaît dans les plis de sa forme sombre.</p><p>Tu observes si ton tir l’a arrêtée.</p>`,
+    choices: [{label: "Voir le résultat du tir", to: 'c27'}]
+  },
 
-      <p>Autour de toi, les autres ampoules sont toutes vides ou brisées.</p>
+  c123: {
+    number: 'PAGE 123', title: "Une lame contre le disparu", noImage: true,
+    text: `<p>Ta lame file vers le disparu de Rochebrume. Tu guettes l’effet du projectile.</p>`,
+    choices: [{label: "Voir le résultat du tir", to: 'c38'}]
+  },
 
-      <p>Tu ne sais pas ce que celle-ci peut encore soigner.</p>
+  c124: {
+    number: 'PAGE 124', title: "Une lame sur l’îlot", noImage: true,
+    text: `<p>Tu lances une lame vers la créature de l’îlot. Elle heurte son corps déformé. Tu attends de voir si elle poursuivra sa marche.</p>`,
+    choices: [{label: "Voir le résultat du tir", to: 'c47'}]
+  },
 
-      <p>Tu sais seulement que les machines de cette salle cherchaient à extraire un mal inconnu.</p>
-    `,
-    choices: state => hasItem(state, 'ampoule_blanche')
-      ? [{ label: 'Examiner les gravures de la salle', to: 'c81' }]
+  c125: {
+    number: 'PAGE 125', title: "Une lame au-dessus du vide", noImage: true,
+    text: `<p>Tu projettes une lame contre le marcheur qui grimpe sous le pont. La créature se replie autour d’une corde. Tu dois voir si elle tient encore.</p>`,
+    choices: [{label: "Voir le résultat du tir", to: 'c62'}]
+  },
+
+  c126: {
+    number: 'PAGE 126', title: "Une lame dans le couloir", noImage: true,
+    text: `<p>Tu projettes une lame vers le chevalier transformé. Elle le frappe dans l’étroitesse de la cellule.</p>`,
+    choices: [{label: "Voir le résultat du tir", to: 'c97'}]
+  },
+
+  c127: {
+    number: 'PAGE 127', title: "L’anneau récupéré", noImage: true,
+    text: `<p>Tu soulèves l’anneau de la dalle. Il semble presque ne rien peser. Le symbole de l’œil fermé apparaît sur sa tranche.</p><p>Tu regagnes la barque.</p>`,
+    choices: [{label: "Reprendre la barque", to: 'c48'}]
+  },
+
+  c128: {
+    number: 'PAGE 128', title: "Le gantelet du Veilleur", noImage: true,
+    text: `<p>Tu détaches doucement le gantelet de la main du squelette. Les plaques sont encore solides ; tu l’ajustes à ton bras avant de franchir la porte du quartier haut.</p>`,
+    choices: [{label: "Franchir la porte", to: 'c67'}]
+  },
+
+  c130: {
+    number: 'PAGE 130', title: "La lame de diversion", noImage: true,
+    text: `<p>Tu projettes une lame au-delà du pont. Elle fend la brume et disparaît sous les planches.</p>
+      <p>La lame de jet tinte contre une pierre très loin sous le pont.</p>
+      <p>La chose lâche aussitôt la face inférieure du pont et disparaît dans la brume à sa poursuite.</p>
+      <p>Tu peux poursuivre ta traversée sans l’affronter.</p>`,
+    choices: [{label: "Achever la traversée", to: 'c63'}]
+  },
+
+  c131: {
+    number: 'PAGE 131', title: "La corde du Veilleur", noImage: true,
+    text: `<p>Tu défais la ceinture de corde rouge du corps desséché. Le tressage est intact. Tu la ranges à portée de main.</p>`,
+    choices: state => state.flags.bridgeSatchelSearched
+      ? [{ label: 'Gagner la porte', to: 'c64' }]
       : [
-          {
-            label: 'Prendre l’Ampoule blanche',
-            to: 'c81',
-            effect: s => addItem(s, 'ampoule_blanche', 'Ampoule blanche', 'Une ampoule des Veilleurs contenant un liquide blanc. Elle semble avoir servi au traitement de ceux que la montagne avait atteints.')
-          },
-          { label: 'La laisser', to: 'c81' }
+          { label: 'Fouiller aussi la sacoche', to: 'c65' },
+          { label: 'Gagner la porte', to: 'c64' }
         ]
   },
 
-  c81: {
-    number: 'PAGE 81',
-    title: '',
-    image: 'Ce qu’ils essayaient de sauver',
-    text: `
-      <p>Sur le mur du fond, une série de silhouettes raconte ce qui se passait ici.</p>
-
-      <p>La première représente un homme tourné vers une montagne.</p>
-
-      <p>Trois traits partent de sa tête, comme s’il écoutait quelque chose.</p>
-
-      <p>Dans la seconde, une matière sombre apparaît autour de sa bouche, de ses mains et de sa poitrine.</p>
-
-      <p>Dans la troisième, il est attaché sur une table semblable à celles qui t’entourent.</p>
-
-      <p>Les aiguilles entrent dans son corps.</p>
-
-      <p>La matière noire en ressort et coule vers un récipient.</p>
-
-      <p>Dans la dernière image, l’homme est debout. L’œil fermé est gravé au-dessus de lui.</p>
-
-      <p>Sous les dessins, quelques mots sont encore lisibles :</p>
-
-      <blockquote>À L’APPEL, RETENIR.</blockquote>
-
-      <blockquote>EXTRAIRE AVANT LA DESCENTE.</blockquote>
-
-      <blockquote>APRÈS L’EXTRACTION, LE SILENCE REVIENT CHEZ CERTAINS.</blockquote>
-
-      <p>Une dernière ligne a été ajoutée plus tard :</p>
-
-      <blockquote>S’ILS ENTENDENT ENCORE, NE PAS LES LAISSER DESCENDRE.</blockquote>
-
-      <p>Tu regardes les sangles avec un malaise nouveau.</p>
-
-      <p>Les Veilleurs ne torturaient pas les gens attirés sous la montagne.</p>
-
-      <p>Ils tentaient de les sauver.</p>
-
-      <p>Ils avaient compris que l’appel et la terre noire faisaient partie du même mal.</p>
-
-      <p>Et parfois, ils parvenaient à faire taire la voix.</p>
-    `,
-    choices: [{ label: 'Quitter le laboratoire', to: 'c82' }]
+  c136: {
+    number: 'PAGE 136', title: "Les lames récupérées", noImage: true,
+    text: `<p>Tu enveloppes les cinq lames dans un morceau de tissu et les glisses dans ton équipement. Tu repars vers les bureaux.</p>`,
+    choices: [{label: "Rejoindre les bureaux", to: 'c82'}]
   },
 
-  c82: {
-    number: 'PAGE 82',
-    title: 'La salle de veille',
-    image: 'La salle de veille',
-    text: state => {
-      let routeMemory = '';
-      if (state.flags.cityRoute === 'names') {
-        routeMemory = '<p>La liste des appelés te revient en mémoire. Ton propre nom parmi les leurs rend cette histoire beaucoup trop proche.</p>';
-      } else if (state.flags.cityRoute === 'voices') {
-        routeMemory = '<p>Tu repenses aux voix derrière les portes. Tu sais maintenant qu’une partie de l’appel consiste à donner aux victimes une raison de continuer.</p>';
-      } else if (state.flags.cityRoute === 'laboratory') {
-        routeMemory = '<p>Les tables et les aiguilles du laboratoire te reviennent en mémoire. Les Veilleurs avaient trouvé un moyen d’arracher au moins une partie du mal.</p>';
-      }
-      return `
-        <p>Le passage débouche dans une salle ronde.</p>
+  c137: {
+    number: 'PAGE 137', title: '', noImage: true,
+    text: `<p>Tu soulèves le loquet. Le chevalier tire son corps vers l’ouverture et se retient au montant.</p>
+      <blockquote>« Merci… Je savais que vous ne me laisseriez pas ici. »</blockquote>
+      <p>Tu t’écartes et reprends le couloir vers l’arche.</p>`,
+    choices: [{ label: 'T’éloigner de la cellule', to: 'c147' }]
+  },
+  c138: {
+    number: 'PAGE 138', title: "Le remède du laboratoire", noImage: true,
+    text: `<p>Tu prends l’unique ampoule intacte et la ranges avec précaution. Les derniers registres sont ouverts sur la table voisine.</p>`,
+    choices: [{label: "Lire les derniers registres", to: 'c103'}]
+  },
 
-        <p>Trois accès y arrivent.</p>
-
-        <p>Sur l’un, tu reconnais les noms gravés.</p>
-
-        <p>Un autre mène au couloir des portes.</p>
-
-        <p>Le troisième est marqué par les plaques blanches du laboratoire.</p>
-
-        <p>Les trois chemins se rejoignent ici.</p>
-
-        <p>Au centre, une grande dalle dressée porte quatre scènes simples.</p>
-
-        <p>Un homme entend quelque chose depuis la montagne.</p>
-
-        <p>Dans la scène suivante, de la matière noire apparaît autour de sa bouche et de ses mains.</p>
-
-        <p>Puis des Veilleurs le retiennent et tentent d’extraire cette matière.</p>
-
-        <p>Enfin, un œil fermé se dresse devant un passage qui descend sous terre.</p>
-
-        <p>Cette fois, tu n’as plus besoin de deviner l’essentiel.</p>
-
-        <p>Les disparus entendent un appel.</p>
-
-        <p>Quelque chose utilise leurs souvenirs, leurs voix ou leurs désirs pour les attirer jusqu’à la montagne.</p>
-
-        <p>La terre noire apparaît chez certains d’entre eux à mesure que le mal progresse.</p>
-
-        <p>Les Veilleurs les recensaient, les interceptaient ici et tentaient de les soigner avant qu’ils ne descendent plus profondément.</p>
-
-        ${routeMemory}
-
-        <p>Tu ne sais toujours pas ce qui appelle.</p>
-
-        <p>Mais tu sais désormais ce que les Veilleurs essayaient d’empêcher.</p>
-
-        <p>Au bas de la dalle, une dernière gravure montre une petite lame noire coupant plusieurs traits qui relient un homme à quelque chose laissé hors du dessin.</p>
-
-        <p>À côté, une flèche pointe vers les niveaux inférieurs de la cité.</p>
-
-        <p>Si Aldren a continué, c’est probablement par là.</p>
-      `;
+  c144: {
+    number: 'PAGE 144', title: '', noImage: true,
+    text: `<p>« Attendez… Je vous en prie ! »</p><p>Tu t’éloignes sans toucher à la porte. Le chevalier frappe une fois contre le bois ; puis ses appels deviennent indistincts.</p><p>Tu retrouves l’arche au bout du couloir.</p>`,
+    choices: [{ label: 'Quitter le quartier d’observation', to: 'c98' }]
+  },
+  c145: {
+    number: 'PAGE 145', title: '', image: 'Le bouclier du chevalier',
+    text: s => hasItem(s, 'bouclier_chevalier')
+      ? `<p>Tu passes l’avant-bras dans les sangles du petit bouclier. Il est désormais dans ton équipement.</p>`
+      : `<p>Contre le pied de la table repose un petit bouclier de métal cabossé. Ses sangles tiennent encore.</p>
+         <p>Il pourrait absorber plusieurs coups, mais son poids ralentira tes mouvements.</p>`,
+    choices: s => hasItem(s, 'bouclier_chevalier')
+      ? [{ label: 'Quitter la cellule', to: 'c98' }]
+      : [
+        { label: 'Prendre le bouclier (Protection +6, Dextérité −1)', stay: true, effect: addKnightShield },
+        { label: 'Laisser le bouclier et partir', to: 'c98' }
+      ]
+  },
+  // Conservée uniquement pour reprendre les anciennes sauvegardes déjà situées page 146.
+  // Aucun choix de la nouvelle version ne conduit ici.
+  c146: {
+    number: 'PAGE 146', title: '', noImage: true,
+    text: `<p>Tu passes l’avant-bras dans les sangles du bouclier et regagnes le couloir. Son poids ralentit légèrement tes gestes, mais il pourra te protéger des prochains coups.</p>`,
+    choices: [{ label: 'Rejoindre la salle ronde', to: 'c98' }]
+  },
+  c147: {
+    number: 'PAGE 147', title: '', noImage: true,
+    onEnter: s => {
+      if (s.flags.knightFate !== 'freed' || s.flags.knightBackstabDone) return;
+      s.flags.knightBackstabDone = true;
+      const before = s.hp;
+      s.hp = Math.max(0, s.hp - 2);
+      s.flags.knightBackstabLife = before - s.hp;
+      raiseContamination(s, 2);
+      s.flags.knightFate = s.hp <= 0 ? 'freed' : 'dead';
     },
-    choices: [{ label: 'Suivre la direction indiquée par les Veilleurs', to: 'c83' }]
+    text: s => `<p>Un choc te frappe entre les épaules. Le chevalier s’est jeté sur toi. Ses membres transformés se contractent autour de tes jambes ; de la terre noire pénètre dans une entaille sous ton armure.</p>
+      <p><strong>−${s.flags.knightBackstabLife ?? 2} Vie. Terre noire : +2.</strong></p>
+      ${s.hp <= 0 ? '<p>Tu t’effondres avant de pouvoir lui échapper.</p>' : '<p>Tu te dégages, tires ton épée et lui tranches la tête d’un coup. Son corps s’affaisse et ne bouge plus.</p><p>Tu te relèves et gagnes l’arche.</p>'}`,
+    choices: s => s.hp <= 0 ? fatalChoices() : [{ label: 'Quitter le quartier', to: 'c98' }]
   },
-
-  c83: {
-    number: 'PAGE 83',
-    title: 'L’avenue basse',
-    image: 'L’avenue basse',
-    text: `
-      <p>Tu quittes le carrefour par une avenue qui descend lentement.</p>
-
-      <p>Ici, la cité paraît moins intacte.</p>
-
-      <p>Des blocs se sont détachés des façades. Des dalles sont fendues. Par endroits, des racines minérales ont soulevé le sol.</p>
-
-      <p>Tu avances entre les débris.</p>
-
-      <p>Sur plusieurs pierres, tu retrouves l’œil fermé.</p>
-
-      <p>Les marques ne sont pas décoratives. Elles ont été gravées à hauteur de main, parfois accompagnées d’un trait ou d’une flèche.</p>
-
-      <p>Quelqu’un s’en servait pour se repérer.</p>
-
-      <p>Plus bas, une partie entière de la rue s’est effondrée.</p>
-
-      <p>Derrière les pierres brisées apparaît une maçonnerie plus ancienne, grossière, directement appuyée contre la roche.</p>
-
-      <p>La cité n’a pas été construite d’un seul bloc.</p>
-
-      <p>Quelque chose existait déjà ici lorsqu’on a élevé ses rues.</p>
-    `,
-    choices: [{ label: 'Examiner l’éboulement', to: 'c84' }]
-  },
-
-  c84: {
-    number: 'PAGE 84',
-    title: 'Le passage de service',
-    image: 'Derrière le mur',
-    text: `
-      <p>Tu longes l’éboulement jusqu’à trouver une ouverture entre deux blocs.</p>
-
-      <p>Elle est étroite, mais quelqu’un a déjà déplacé plusieurs pierres pour l’agrandir.</p>
-
-      <p>Tu te glisses à l’intérieur.</p>
-
-      <p>Derrière la façade de la cité court un ancien passage de service taillé à même la roche.</p>
-
-      <p>Le plafond est bas. Les parois portent encore les traces régulières d’outils.</p>
-
-      <p>À plusieurs endroits, des étais de bois se sont effondrés depuis longtemps. Tu dois escalader leurs restes, ramper sous une poutre puis te hisser sur une corniche étroite.</p>
-
-      <p>Le passage se termine au bord d’un conduit vertical.</p>
-
-      <p>Des prises ont été creusées dans la paroi. De vieux anneaux de fer sont scellés dans la pierre.</p>
-
-      <p>Au fond, une plateforme apparaît une dizaine de mètres plus bas.</p>
-
-      <p>Sur son bord, tu distingues encore le symbole de l’œil fermé.</p>
-    `,
-    choices: [{ label: 'Préparer la descente', to: 'c85' }]
-  },
-
-  c85: {
-    number: 'PAGE 85',
-    title: 'Le puits des Veilleurs',
-    image: 'Le puits des Veilleurs',
-    text: state => `
-      <p>Tu t’accroupis au bord du conduit.</p>
-
-      <p>Les prises de pierre sont usées mais encore praticables. Plusieurs ont toutefois perdu un morceau de leur bord.</p>
-
-      <p>Les anneaux de fer semblent plus solides.</p>
-
-      <p>En dessous, le puits s’enfonce dans une partie de la montagne qui ne ressemble plus à une ville.</p>
-
-      <p>Seulement à un chantier très ancien.</p>
-
-      ${hasItem(state, 'ceinture_corde_rouge') ? '<p>La Ceinture de corde rouge peut te servir à t’assurer aux anneaux pendant la descente.</p>' : '<p>Sans corde, tu devras compter sur les prises et sur ton équilibre.</p>'}
-    `,
-    choices: state => {
-      const list = [];
-      if (hasItem(state, 'ceinture_corde_rouge')) {
-        list.push({
-          label: 'T’assurer avec la Ceinture de corde rouge',
-          to: 'c86',
-          effect: s => { s.flags.cityWellDescent = 'rope'; }
-        });
-      }
-      list.push({
-        label: 'Descendre par les prises — lancer les trois dés de Dextérité',
-        to: 'c86',
-        effect: s => {
-          const ok = roll3D6(s, 'Dextérité', currentDexterity(s));
-          s.flags.cityWellDescent = ok ? 'success' : 'fail';
-          if (!ok) s.flags.cityWellDamage = applyDamage(s, 2);
-        }
-      });
-      return list;
+  c149: {
+    number: 'PAGE 149', title: '', image: 'Le chevalier enragé',
+    onEnter: s => { if (!s.flags.knightFate) s.flags.knightFate = 'hostile'; },
+    text: s => {
+      const enemy = ENEMIES.observationPrisonerCorridor;
+      const combat = combatState(s, 'observationPrisonerCorridor', enemy);
+      const card = enemyCardHtml(s, 'observationPrisonerCorridor', enemy);
+      const result = combat.lastBlade ? throwingBladeResultHtml(s, 'observationPrisonerCorridor', enemy) : combatRoundHtml(s, 'observationPrisonerCorridor', enemy);
+      if (combat.hp <= 0) return `${card}${result}<p>Le chevalier s’écroule au milieu du couloir. Derrière lui, la porte de sa cellule est éventrée. Un petit bouclier est resté près de la table.</p>`;
+      if (s.hp <= 0) return `${card}${result}<p>Le chevalier t’abat dans le couloir avant que tu puisses rejoindre l’arche.</p>`;
+      if (!combat.last && !combat.lastBlade) return `<p>Tu recules sans répondre et te détournes de la cellule.</p><blockquote>« Non ! Revenez ! »</blockquote><p>Un cri se change en rugissement. Derrière la porte, des os craquent. La masse qui lui tient lieu de jambes se gonfle et heurte le bois. Les gonds cèdent ; la porte s’abat dans le couloir.</p><p>Le chevalier se propulse vers toi. Tu dégaines juste à temps.</p>${card}`;
+      return `${card}${result}<p>Il rampe vers toi avec une force terrible. Le passage est trop étroit pour le contourner.</p>`;
+    },
+    choices: s => {
+      const combat = combatState(s, 'observationPrisonerCorridor', ENEMIES.observationPrisonerCorridor);
+      if (s.hp <= 0) return fatalChoices();
+      if (combat.hp <= 0) return [
+        { label: 'Entrer et examiner son bouclier', to: 'c145', effect: t => { t.flags.knightFate = 'dead'; } },
+        { label: 'Quitter le quartier sans rien prendre', to: 'c98', effect: t => { t.flags.knightFate = 'dead'; } }
+      ];
+      return combatActionChoices(s, 'observationPrisonerCorridor', ENEMIES.observationPrisonerCorridor, 'c149');
     }
   },
-
-  c86: {
-    number: 'PAGE 86',
-    title: 'Le palier inférieur',
-    image: 'Le palier inférieur',
-    text: state => {
-      const descent = state.flags.cityWellDescent;
-      const canCleanse = hasItem(state, 'ampoule_blanche') && ((state.dexPenalty || 0) > 0 || contaminationLevel(state)>0);
-      let intro = '';
-      if (descent === 'rope') {
-        intro = `
-          <p>Tu fixes la corde à l’un des anneaux et descends lentement.</p>
-
-          <p>Deux prises cèdent sous tes bottes, mais la corde retient ton poids.</p>
-
-          <p>Tu atteins la plateforme sans blessure.</p>
-        `;
-      } else if (descent === 'success') {
-        intro = diceResultHtml(state) + `
-          <p>Tu descends en prenant le temps de tester chaque prise avant d’y mettre ton poids.</p>
-
-          <p>La roche s’effrite parfois sous tes doigts, mais tu atteins la plateforme sans glisser.</p>
-        `;
-      } else {
-        intro = diceResultHtml(state) + `
-          <p>À quelques mètres du fond, une prise se détache sous ta main.</p>
-
-          <p>Tu glisses, heurtes la paroi puis tombes lourdement sur la plateforme.</p>
-
-          ${damageAbsorptionHtml(state.flags.cityWellDamage)}
-
-          <p>Tu restes un instant au sol avant de te relever.</p>
-        `;
-      }
-      return intro + `
-        <p>La plateforme donne sur une galerie basse encombrée d’outils rongés par la rouille et de paniers de pierre effondrés.</p>
-
-        <p>Les Veilleurs ont creusé ici.</p>
-
-        <p>Dans un renfoncement, une petite dalle porte plusieurs cavités de la taille des ampoules du laboratoire.</p>
-
-        <p>Le bord de certaines est taché de noir.</p>
-
-        ${canCleanse ? '<p>L’Ampoule blanche que tu transportes s’adapte exactement à l’une de ces cavités.</p><p>Tu repenses à la terre restée sous tes ongles et au goût qui revient parfois au fond de ta gorge.</p>' : ''}
-
-        <p>Plus loin, une flèche gravée sous un œil fermé indique une galerie descendante.</p>
-      `;
-    },
-    choices: state => {
-      if (state.hp <= 0) return fatalChoices();
-      const list = [];
-      if (hasItem(state, 'ampoule_blanche') && ((state.dexPenalty || 0) > 0 || contaminationLevel(state)>0)) {
-        list.push({
-          label: 'Utiliser l’Ampoule blanche',
-          to: 'c87',
-          effect: s => {
-            removeItem(s, 'ampoule_blanche');
-            if ((s.dexPenalty || 0) > 0) s.dexPenalty = Math.max(0, s.dexPenalty - 1);
-            s.flags.blackEarthContamination = false;
-            s.flags.usedWhiteAmpouleAtWell = true;
-          }
-        });
-      }
-      list.push({ label: 'Conserver ce que tu possèdes et suivre la galerie', to: 'c87' });
-      return list;
-    }
+  c150: {
+    number: 'PAGE 150', title: '', noImage: true,
+    text: `<p>Tu projettes une lame vers le chevalier transformé. La lame le frappe dans le couloir, au milieu des débris de la porte.</p>`,
+    choices: [{ label: 'Voir le résultat du tir', to: 'c149' }]
+  },
+  c129: {
+    number: 'PAGE 129', title: 'Avancer sans bruit', noImage: true,
+    text: s => `${diceResultHtml(s)}${s.flags.bridgeCalmPassed
+      ? '<p>Tu te forces à avancer sans accélérer. La chose accompagne tes pas sous les planches, puis finit par s’immobiliser. Tu atteins les dernières planches avant qu’elle ne remonte.</p>'
+      : '<p>Tu avances en retenant ton souffle, mais une planche gémit sous ta botte. La chose s’immobilise sous toi, puis ses longs doigts se referment sur le bord du pont. Elle te barre la route.</p>'}`,
+    choices: s => s.flags.bridgeCalmPassed
+      ? [{ label: 'Achever la traversée', to: 'c63' }]
+      : [{ label: 'Faire face au marcheur', to: 'c61', effect: t => { t.flags.bridgeSolution = 'fight'; } }]
   },
 
-  c87: {
-    number: 'PAGE 87',
-    title: 'La porte sous la ville',
-    image: 'La porte sous la ville',
-    text: state => `
-      ${state.flags.usedWhiteAmpouleAtWell ? `
-        <p>Le liquide blanc brûle légèrement lorsqu’il touche tes doigts.</p>
-
-        <p>La terre noire tassée sous tes ongles se ramollit puis se détache en grains épais.</p>
-
-        <p>Tu t’essuies longuement.</p>
-
-        <p>Le goût terreux au fond de ta gorge finit lui aussi par s’atténuer.</p>
-
-        <p>Pour la première fois depuis la fissure, tu as l’impression d’en être débarrassé.</p>
-      ` : ''}
-
-      <p>Tu suis la galerie indiquée par les Veilleurs.</p>
-
-      <p>Elle descend entre des murs renforcés de blocs bruts. Des niches contiennent encore des coins de métal, des masses et des fragments de corde pétrifiée par l’âge.</p>
-
-      <p>Au bout se trouve une porte de pierre noire, à peine plus haute que toi.</p>
-
-      <p>Un œil fermé est gravé à hauteur d’homme.</p>
-
-      <p>Juste en dessous, quelqu’un a ajouté le dessin sommaire d’une petite lame noire.</p>
-
-      <p>La gravure est plus récente que le reste.</p>
-
-      <p>Près du seuil, une empreinte de botte s’est imprimée dans une plaque de poussière humide.</p>
-
-      <p>Elle va vers l’intérieur.</p>
-
-      <p>Tu penses à Aldren.</p>
-
-      <p>Tu n’as aucune preuve qu’elle lui appartienne.</p>
-
-      <p>La porte résiste d’abord, puis cède sous ton épaule dans un grondement sourd.</p>
-    `,
-    choices: [{ label: 'Passer sous la cité', to: 'c88' }]
+  c132: {
+    number: 'PAGE 132', title: 'La première sentinelle', noImage: true,
+    onEnter: s => { s.flags.sentinelResultAcknowledged = true; },
+    text: s => `<p>Tu affrontes la première sentinelle, l’épée levée.</p>${sentinelCardsHtml(s)}${sentinelResultHtml(s)}`,
+    choices: s => sentinelResultChoices(s)
   },
-
-  c88: {
-    number: 'PAGE 88',
-    title: 'Sous la Cité morte',
-    image: 'Sous la Cité morte',
-    onEnter: s => setCheckpoint(s, 'Sous la Cité morte'),
-    text: `
-      <p>Derrière la porte, un escalier grossier s’enfonce dans la roche.</p>
-
-      <p>Tu descends.</p>
-
-      <p>La pierre travaillée de la cité disparaît rapidement. Ici, les galeries ont été creusées à la main puis renforcées là où la montagne menaçait de reprendre sa place.</p>
-
-      <p>Des rainures courent au sol pour évacuer une eau qui ne coule plus.</p>
-
-      <p>Des anneaux de fer ponctuent les parois. Certains portent encore des lambeaux de corde.</p>
-
-      <p>Tu passes sous un étai brisé, franchis une tranchée étroite et dois te hisser sur un ancien front de taille pour poursuivre.</p>
-
-      <p>Les marques laissées par les Veilleurs deviennent plus nombreuses.</p>
-
-      <p>L’œil fermé.</p>
-
-      <p>Puis, de plus en plus souvent, la petite lame noire.</p>
-
-      <p>Sur une paroi, quelqu’un a gravé la lame au-dessus d’une ligne qui descend encore.</p>
-
-      <p>À côté, une seconde empreinte de botte marque la poussière.</p>
-
-      <p>Plus nette que la première.</p>
-
-      <p>Quelqu’un est passé par ici.</p>
-
-      <p>Tu resserres ta prise sur ton arme et t’engages dans la galerie.</p>
-
-      <p>Devant toi, la roche descend vers des niveaux plus anciens encore.</p>
-
-      <p><strong>Fin de cette version test.</strong></p>
-    `,
-    choices: [
-      { label: 'Reprendre au dernier point de sauvegarde', action: 'checkpoint' },
-      { label: 'Recommencer depuis le début', action: 'restart' }
-    ]
-  }
+  c133: {
+    number: 'PAGE 133', title: 'Le tir sur la première sentinelle', noImage: true,
+    onEnter: s => { s.flags.sentinelResultAcknowledged = true; },
+    text: s => `<p>Tu vises la première sentinelle et lances ta lame.</p>${sentinelCardsHtml(s)}${sentinelResultHtml(s)}`,
+    choices: s => sentinelResultChoices(s)
+  },
+  c134: {
+    number: 'PAGE 134', title: 'La seconde sentinelle', noImage: true,
+    onEnter: s => { s.flags.sentinelResultAcknowledged = true; },
+    text: s => `<p>Tu te tournes vers la seconde sentinelle et frappes.</p>${sentinelCardsHtml(s)}${sentinelResultHtml(s)}`,
+    choices: s => sentinelResultChoices(s)
+  },
+  c135: {
+    number: 'PAGE 135', title: 'Le tir sur la seconde sentinelle', noImage: true,
+    onEnter: s => { s.flags.sentinelResultAcknowledged = true; },
+    text: s => `<p>Tu vises la seconde sentinelle et lances ta lame.</p>${sentinelCardsHtml(s)}${sentinelResultHtml(s)}`,
+    choices: s => sentinelResultChoices(s)
+  },
 
 };
 
-  // Publication progressive : pour ouvrir la suite plus tard, augmenter
-  // UNIQUEMENT ce nombre (par ex. 66) dans la prochaine version joueurs.
-  // Les identifiants c1, c2... ne doivent pas changer : les sauvegardes
-  // pointent vers ces identifiants et conservent toutes les décisions prises.
-  const PUBLISHED_PAGE_COUNT = 40;
-  const PAGE_ORDER = Array.from({ length: PUBLISHED_PAGE_COUNT }, (_, i) => `c${i + 1}`);
-  const PAGE_BY_NODE = Object.fromEntries(PAGE_ORDER.map((id, i) => [id, i + 1]));
+  // Libellés complets de l’outil de navigation TEST.
+  // Les titres narratifs de STORY restent volontairement masqués sur certaines pages.
+  // The player edition contains only pages published through 104, plus necessary side effects.
+  const PAGE_NAV_TITLES = {};
+
+  const PUBLISHED_MAIN_PAGE_COUNT = 104;
+  const PUBLISHED_SIDE_PAGES = [...Array.from({ length: 21 }, (_, i) => `c${i + 118}`), 'c144', 'c145', 'c146', 'c147', 'c149', 'c150'];
+  const PAGE_ORDER = ['c0', ...Array.from({ length: PUBLISHED_MAIN_PAGE_COUNT }, (_, i) => `c${i + 1}`), ...PUBLISHED_SIDE_PAGES];
+  const PAGE_BY_NODE = Object.fromEntries(PAGE_ORDER.map(id => [id, Number(id.slice(1))]));
   const padPage = n => String(n).padStart(3, '0');
 
   function equipHeavySword(state) {
@@ -4522,7 +4451,7 @@ const STORY = {
 
   function currentForce(state) {
     const itemBonus = hasItem(state, 'brassard_veilleurs') ? 1 : 0;
-    return Math.max(3, state.baseForce + (state.forceBonus || 0) + itemBonus);
+    return Math.max(3, state.baseForce + (state.forceBonus || 0) + (state.flags.labInjected ? 2 : 0) + itemBonus);
   }
 
   function currentDexterity(state) {
@@ -4530,11 +4459,15 @@ const STORY = {
       state.weapon === 'heavy' ? -4 :
       state.weapon === 'light' ? -1 : 0;
     const itemBonus = hasItem(state, 'anneau_veilleurs') ? 1 : 0;
+    const shieldPenalty = shieldIsActive(state) ? 1 : 0;
     return Math.max(3,
       state.baseDexterity +
       (state.dexBonus || 0) +
       itemBonus -
-      (state.dexPenalty || 0) +
+      (state.dexPenalty || 0) -
+      (state.flags.labInjected ? 1 : 0) -
+      (state.flags.collarEquipped ? 1 : 0) -
+      shieldPenalty +
       weaponModifier
     );
   }
@@ -4569,6 +4502,7 @@ const STORY = {
     const base = seriesProfile.baseStats || {};
     return {
       node: 'start',
+      pageMapVersion: 72,
       heroGender: seriesProfile.heroGender === 'male' ? 'male' : 'female',
       heroName: seriesProfile.heroGender === 'male' ? 'Aubin' : 'Aélis',
       inventory: {},
@@ -4583,6 +4517,7 @@ const STORY = {
       forceBonus: 0,
       dexBonus: 0,
       dexPenalty: 0,
+      contamination: 0,
       weapon: 'none',
       silver: 0,
       goldCoins: 0,
@@ -4606,126 +4541,227 @@ const STORY = {
     };
   }
 
-  const TEST_ITEM_CATALOG = [
-    {
-      id: 'parchemin',
-      name: 'Notes d’Aldren',
-      description: 'Un fragment ancien découvert dans les affaires de Sir Aldren. Il peut être relu quand tu veux.'
-    },
-    {
-      id: 'fiole_rouge',
-      name: 'Fiole rouge',
-      description: 'Une petite fiole au liquide rouge sombre. Son utilité est encore inconnue.'
-    },
-    {
-      id: 'potion_guerison',
-      name: 'Potion de guérison',
-      description: 'Une potion du marchand. Elle rend 1 dé de Vie lorsqu’elle est bue.'
-    },
-    {
-      id: 'potion_sombre',
-      name: 'Fiole rouge sombre',
-      description: 'Restaure 3 Vie ; ajoute 2 points de terre noire.'
-    },
-    {
-      id: 'brassard_veilleurs',
-      name: 'Brassard des Veilleurs',
-      description: 'Un brassard sombre étonnamment léger. Tant qu’il est coché : +1 Force.'
-    },
-    {
-      id: 'anneau_veilleurs',
-      name: 'Anneau des Veilleurs',
-      description: 'Un anneau ancien et très léger. Tant qu’il est coché : +1 Dextérité.'
-    },
-    {
-      id: 'lames_jet',
-      name: 'Lames de jet',
-      description: 'Petites lames vendues par Élias. En mode test, les cocher en donne 3.',
-      special: 'throwingBlades'
-    },
-    {
-      id: 'ceinture_rouge',
-      name: 'Ceinture de corde rouge',
-      description: 'Une ceinture des Veilleurs : +1 Force lors des tests pour grimper, retenir ou se suspendre.'
-    },
-    {
-      id: 'casque_cabosse',
-      name: 'Casque cabossé',
-      description: 'Un casque de fer ancien. Donne 2 points de Protection qui encaissent les dégâts avant la Vie.',
-      protection: 2
-    },
-    {
-      id: 'gantelet_veilleur',
-      name: 'Gantelet de Veilleur',
-      description: 'Un gant d’armure articulé. Donne 1 point de Protection qui encaisse les dégâts avant la Vie.',
-      protection: 1
-    },
-    {
-      id: 'plaque_veilleur',
-      name: 'Plaque du Veilleur',
-      description: 'Une petite plaque de bronze portant l’œil fermé. Son usage reste inconnu.'
-    },
-    {
-      id: 'ampoule_blanche',
-      name: 'Ampoule blanche',
-      description: 'Une ampoule des Veilleurs liée au traitement de la terre noire.'
+  // V53 : les anciennes pages c53...c88 deviennent c56...c91.
+  // Conversion unique et idempotente des sauvegardes et checkpoints V52.
+  function migratePageNumbersV53(state) {
+    if (!state || typeof state !== 'object' || state.pageMapVersion >= 53) return state;
+    const renumber = id => {
+      if (typeof id !== 'string') return id;
+      const match = /^c(\d+)$/.exec(id);
+      if (!match) return id;
+      const page = Number(match[1]);
+      return page >= 53 && page <= 88 ? `c${page + 3}` : id;
+    };
+    state.node = renumber(state.node);
+    if (state.visited && typeof state.visited === 'object' && !Array.isArray(state.visited)) {
+      state.visited = Object.fromEntries(Object.entries(state.visited).map(([id, value]) => [renumber(id), value]));
     }
-  ];
-
-  function testItemOwned(state, entry) {
-    if (entry.special === 'throwingBlades') return (state.throwingBlades || 0) > 0;
-    return hasItem(state, entry.id);
+    if (Array.isArray(state.history)) state.history = state.history.map(renumber);
+    state.pageMapVersion = 53;
+    return state;
   }
 
-  function setTestItem(state, entry, enabled) {
-    if (entry.special === 'throwingBlades') {
-      state.throwingBlades = enabled ? Math.max(3, state.throwingBlades || 0) : 0;
-      syncThrowingBlades(state);
-      return;
+  // V55 : après migration éventuelle V53, les anciennes pages 70 à 91 deviennent 75 à 96.
+  // Les cinq nouvelles pages 070-074 restent le passage commun obligatoire.
+  function migratePageNumbersV55(state) {
+    if (!state || typeof state !== 'object') return state;
+    if (!Number.isFinite(state.pageMapVersion) || state.pageMapVersion < 53) migratePageNumbersV53(state);
+    if (state.pageMapVersion >= 55) return state;
+    const renumber = id => {
+      if (typeof id !== 'string') return id;
+      const match = /^c(\d+)$/.exec(id);
+      if (!match) return id;
+      const number = Number(match[1]);
+      return number >= 70 && number <= 91 ? `c${number + 5}` : id;
+    };
+    state.node = renumber(state.node);
+    if (state.visited && typeof state.visited === 'object' && !Array.isArray(state.visited)) {
+      state.visited = Object.fromEntries(Object.entries(state.visited).map(([id, wasVisited]) => [renumber(id), wasVisited]));
     }
-    if (entry.protection) {
-      if (enabled) addProtectiveItem(state, entry.id, entry.name, entry.description, entry.protection);
-      else removeProtectiveItem(state, entry.id);
-      return;
-    }
-    if (enabled) addItem(state, entry.id, entry.name, entry.description);
-    else removeItem(state, entry.id);
+    if (Array.isArray(state.history)) state.history = state.history.map(renumber);
+    // Legacy route ID used by the old optional room. Preserve the player's chosen path.
+    if (state.flags && state.flags.cityRoute === 'names') state.flags.cityRoute = 'quarters';
+    state.pageMapVersion = 55;
+    return state;
   }
 
-  function testInventoryHtml(state) {
-    const itemRows = TEST_ITEM_CATALOG.map(entry => {
-      const checked = testItemOwned(state, entry);
-      const quantity = entry.special === 'throwingBlades' && checked ? ` × ${state.throwingBlades}` : '';
-      return `
-        <label class="test-item-row">
-          <input type="checkbox" data-action="test-toggle-item:${entry.id}" ${checked ? 'checked' : ''}>
-          <span class="test-item-box" aria-hidden="true"></span>
-          <span class="test-item-copy"><strong>${entry.name}${quantity}</strong><small>${entry.description}</small></span>
-        </label>`;
-    }).join('');
 
-    const weaponOptions = [
-      ['none', 'Aucune'],
-      ['heavy', 'Grosse épée · DEX −4 · Puissance 5'],
-      ['light', 'Petite épée · DEX −1 · Puissance 2']
-    ].map(([value, label]) => `
-      <label class="test-weapon-option">
-        <input type="radio" name="testWeapon" data-action="test-equip-weapon:${value}" ${state.weapon === value ? 'checked' : ''}>
-        <span>${label}</span>
-      </label>`).join('');
-
-    return `
-      <div class="test-inventory-panel">
-        <div class="test-inventory-title">Mode test · objets disponibles</div>
-        <p class="test-inventory-note">Tous les objets déjà introduits dans cette version sont visibles ici. Coche ou décoche un objet pour simuler immédiatement sa présence dans ton inventaire.</p>
-        <div class="test-item-list">${itemRows}</div>
-        <div class="test-weapon-panel">
-          <strong>Arme équipée</strong>
-          <div class="test-weapon-list">${weaponOptions}</div>
-        </div>
-      </div>`;
+  // V58 : refonte des 3 routes dans la cité. Les anciennes sauvegardes conservent
+  // leurs données, mais pointent sur les nouvelles pages correspondantes.
+  function migratePageNumbersV58(state) {
+    if (!state || typeof state !== 'object') return state;
+    migratePageNumbersV55(state);
+    if (state.pageMapVersion >= 58) {
+      if (!Number.isFinite(state.contamination)) state.contamination = state.flags?.blackEarthContamination ? 2 : 0;
+      return state;
+    }
+    const map = {"c75": "c76", "c76": "c77", "c77": "c83", "c78": "c84", "c79": "c91", "c80": "c92", "c81": "c94", "c82": "c94", "c83": "c93", "c84": "c98", "c85": "c99", "c86": "c100", "c87": "c102", "c88": "c102", "c89": "c103", "c90": "c104", "c91": "c108", "c92": "c109", "c93": "c110", "c94": "c111", "c95": "c112", "c96": "c113"};
+    const rename = id => (typeof id === 'string' && map[id]) ? map[id] : id;
+    state.node = rename(state.node);
+    if (state.visited && typeof state.visited === 'object' && !Array.isArray(state.visited)) {
+      state.visited = Object.fromEntries(Object.entries(state.visited).map(([key, value]) => [rename(key), value]));
+    }
+    if (Array.isArray(state.history)) state.history = state.history.map(rename);
+    if (!state.flags || typeof state.flags !== 'object') state.flags = {};
+    state.flags.quartersRefectory = !!state.visited?.c76;
+    state.flags.quartersGuard = !!state.visited?.c77;
+    if (state.visited?.c83) state.flags.officeOpened = true;
+    if (!Number.isFinite(state.contamination)) state.contamination = state.flags.blackEarthContamination ? 2 : 0;
+    // Une partie commencée avant la jauge peut déjà avoir subi la projection de Gaspard.
+    if (Number.isInteger(state.damageRolls?.c12) && !state.flags.gaspardEarthRegistered) {
+      state.flags.gaspardEarthRegistered = true;
+      state.contamination = Math.max(1, state.contamination);
+      state.flags.blackEarthContamination = true;
+    }
+    state.pageMapVersion = 58;
+    return state;
   }
-
+  function migratePageNumbersV59(state) {
+    migratePageNumbersV58(state);
+    if (!state.flags || typeof state.flags !== 'object') state.flags = {};
+    if (state.pageMapVersion >= 59) return state;
+    if (state.node === 'c105' && !state.flags.physicianNotesRead) state.node='c114';
+    // The original 113 page numbers are stable. Only new pages 114–116 are added.
+    state.contamination = Math.max(0, Math.min(13, Math.floor(Number(state.contamination)||0)));
+    if (state.contamination >= 13) state.flags.blackEarthTransformed = true;
+    state.pageMapVersion = 59;
+    return state;
+  }
+  // V62: put the doctor's mandatory register before the gate in page order.
+  // Rename old V59–V61 saves and checkpoints only once; preserve items, flags and rolls.
+  function migratePageNumbersV62(state) {
+    migratePageNumbersV59(state);
+    if (state.pageMapVersion >= 62) return state;
+    const map = {"c114":"c105","c115":"c106","c116":"c107","c105":"c108","c106":"c109","c107":"c110","c108":"c111","c109":"c112","c110":"c113","c111":"c114","c112":"c115","c113":"c116"};
+    const rename = id => typeof id === 'string' ? (map[id] || id) : id;
+    state.node=rename(state.node);
+    if (Array.isArray(state.history)) state.history=state.history.map(rename);
+    for (const field of ['visited','damageRolls','damageRollResults']) {
+      if (state[field] && typeof state[field] === 'object' && !Array.isArray(state[field])) {
+        state[field]=Object.fromEntries(Object.entries(state[field]).map(([id,value])=>[rename(id),value]));
+      }
+    }
+    state.pageMapVersion=62;
+    return state;
+  }
+  // V63 : les pages 092–098 sont entièrement réécrites. Une sauvegarde V62.1
+  // prise dans ce passage revient à son entrée pour ne pas mélanger les deux scènes.
+  function migratePageNumbersV63(state) {
+    migratePageNumbersV62(state);
+    if (state.pageMapVersion >= 63) return state;
+    if (!state.flags || typeof state.flags !== 'object') state.flags = {};
+    const insideRewrittenScene = /^c9[2-8]$/.test(state.node || '');
+    const exploredOldScene = !!(state.visited && ['c93','c94','c95','c96','c97'].some(id => state.visited[id]));
+    if (insideRewrittenScene || exploredOldScene) {
+      if (insideRewrittenScene) state.node = 'c92';
+      if (!insideRewrittenScene) state.flags.observationLegacyVisit = true;
+      for (let n = 92; n <= 98; n++) if (state.visited) delete state.visited[`c${n}`];
+      if (Array.isArray(state.history)) state.history = state.history.filter(id => !/^c9[2-8]$/.test(id));
+      for (const field of ['observationRead', 'observationMet', 'observationRecordsHeard',
+        'observationBodyHeard', 'observationReflexRolled', 'observationReflexPassed',
+        'observationReflexDamage', 'observationReflexContaminated', 'observationFight',
+        'observationBraceletTaken', 'observationBraceletDeclined', 'observationBalanceAsked']) delete state.flags[field];
+    }
+    state.pageMapVersion = 63;
+    return state;
+  }
+  // V68 : le passage 106 devient un carrefour facultatif. Le poste, la réserve
+  // et la grille changent d'adresse ; une ancienne sauvegarde reste utilisable.
+  function migratePageNumbersV68(state) {
+    migratePageNumbersV63(state);
+    if (state.pageMapVersion >= 68) return state;
+    const map = {c106:'c107',c107:'c108',c108:'c109',c109:'c109'};
+    const rename = id => typeof id === 'string' ? (map[id] || id) : id;
+    state.node=rename(state.node);
+    if (Array.isArray(state.history)) state.history=state.history.map(rename);
+    for (const field of ['visited','damageRolls','damageRollResults']) {
+      if (state[field] && typeof state[field] === 'object' && !Array.isArray(state[field])) {
+        state[field]=Object.fromEntries(Object.entries(state[field]).map(([id,value])=>[rename(id),value]));
+      }
+    }
+    if (!state.flags || typeof state.flags !== 'object') state.flags={};
+    delete state.flags.commonVoiceChoice;
+    delete state.flags.observationBraceletUsed;
+    // Les objets et doses déjà obtenus ne sont jamais accordés une seconde fois.
+    state.pageMapVersion=68;
+    return state;
+  }
+  // V68.5 : le journal a sa propre page 111. Les anciennes pages 111–116
+  // passent à 112–117, y compris les historiques et résultats de dés.
+  function migratePageNumbersV69(state) {
+    migratePageNumbersV68(state);
+    if (state.pageMapVersion >= 69) return state;
+    const oldToNew = {c117:'c111',c111:'c112',c112:'c113',c113:'c114',c114:'c115',c115:'c116',c116:'c117'};
+    const rename = id => typeof id === 'string' ? (oldToNew[id] || id) : id;
+    state.node = rename(state.node);
+    if (Array.isArray(state.history)) state.history = state.history.map(rename);
+    for (const field of ['visited','damageRolls','damageRollResults']) {
+      if (state[field] && typeof state[field] === 'object' && !Array.isArray(state[field])) {
+        state[field] = Object.fromEntries(Object.entries(state[field]).map(([key,val])=>[rename(key),val]));
+      }
+    }
+    state.pageMapVersion = 69;
+    return state;
+  }
+  // V68.13 : 65 est désormais la sacoche du pont ; 68 sort du parcours.
+  // Une ancienne partie sur 65 ou 68 reprend sans faux gain de lames ni indice inventé.
+  function migratePageNumbersV70(state) {
+    migratePageNumbersV69(state);
+    if (state.pageMapVersion >= 70) return state;
+    const rename = id => id === 'c65' ? 'c64' : id === 'c68' ? 'c69' : id;
+    state.node = rename(state.node);
+    if (Array.isArray(state.history)) state.history = state.history.map(rename);
+    if (state.visited && typeof state.visited === 'object') {
+      delete state.visited.c65;
+      delete state.visited.c68;
+    }
+    state.pageMapVersion = 70;
+    return state;
+  }
+  // V68.15 : le dialogue 93–98 et les issues du chevalier sont réécrits.
+  // Ramener une partie interrompue dans cette scène à son entrée sans confondre
+  // l'ancien bracelet et les nouveaux gants ; ne pas attribuer une issue passée.
+  function migratePageNumbersV71(state) {
+    migratePageNumbersV70(state);
+    if (state.pageMapVersion >= 71) return state;
+    if (!state.flags || typeof state.flags !== 'object') state.flags = {};
+    const oldScene = ['c93','c94','c95','c96','c97','c98','c126','c137'];
+    if (oldScene.includes(state.node)) {
+      state.node = 'c92';
+      for (const id of oldScene) if (state.visited) delete state.visited[id];
+      if (Array.isArray(state.history)) state.history = state.history.filter(id => !oldScene.includes(id));
+      if (state.combats) delete state.combats.observationPrisoner;
+    }
+    if (state.node === 'c142') {
+      state.flags.cityWellDescent = 'success';
+    }
+    if (state.inventory && state.inventory.bracelet_ancrage) delete state.inventory.bracelet_ancrage;
+    for (const key of ['observationReflexRolled','observationReflexPassed','observationReflexDamage',
+      'observationReflexContaminated','observationBraceletTaken','observationBraceletDeclined',
+      'observationBalanceAsked','observationFight','observationRecordsHeard','observationBodyHeard',
+      'observationRead','observationMet']) delete state.flags[key];
+    state.pageMapVersion = 71;
+    return state;
+  }
+  // V68.20 : échange des anciens gants contre le nouveau bouclier.
+  // Une paire déjà utilisée devant la grille reste consommée : pas de bouclier gratuit.
+  function migratePageNumbersV72(state) {
+    migratePageNumbersV71(state);
+    if (state.pageMapVersion >= 72) return state;
+    if (!state.inventory || typeof state.inventory !== 'object') state.inventory = {};
+    if (!state.flags || typeof state.flags !== 'object') state.flags = {};
+    if (hasItem(state, 'gants_veilleurs')) {
+      removeItem(state, 'gants_veilleurs');
+      if (!hasItem(state, 'bouclier_chevalier')) addKnightShield(state);
+    }
+    if (hasItem(state, 'bouclier_chevalier')) state.flags.knightShieldTaken = true;
+    delete state.flags.knightGlovesTaken;
+    if (state.flags.tabletsGlovesUsed) state.flags.tabletsExamined = true;
+    if (state.node === 'c148') state.node = 'c110';
+    if (Array.isArray(state.history)) state.history = state.history.map(id => id === 'c148' ? 'c110' : id);
+    state.pageMapVersion = 72;
+    return state;
+  }
   const inventory = {
     topLine(state) {
       return `Argent : ${state.silver} · Or : ${state.goldCoins} · Arme : ${weaponLabel(state)}`;
@@ -4739,11 +4775,14 @@ const STORY = {
           <div class="inventory-equipment-row"><span>Arme équipée</span><strong>${weaponLabel(state)}</strong></div>
           <div class="inventory-equipment-row"><span>Effet de l’arme</span><strong>DEX ${weaponDex} · Puissance ${state.weapon === 'none' ? 0 : combatPower(state)}</strong></div>
           <div class="inventory-equipment-row"><span>Protection restante</span><strong>${currentProtection(state)} / ${maxProtection(state)}</strong></div>
+          ${shieldIsActive(state) ? '<div class="inventory-equipment-row"><span>Bouclier du chevalier</span><strong>Dextérité −1</strong></div>' : ''}
         </div>`;
       const healing = Number.isInteger(state.lastHealingDie)
         ? `<div class="dice-result"><p class="roll-number">Dernière potion</p><div class="dice-faces">${renderDie(state.lastHealingDie)}</div><p><strong>+${state.lastHealingDie} point${state.lastHealingDie > 1 ? 's' : ''} de Vie</strong></p><p>Vie : <strong>${state.hp} / ${state.maxHp}</strong></p></div>`
         : '';
-      return equipment + (contaminationLevel(state)>0 ? `<div class="inventory-equipment-card"><strong>Terre noire : ${contaminationLevel(state)}/13</strong><p>Effets inconnus.</p></div>` : "") + healing;
+      const testPanel = '';
+      const earth = contaminationLevel(state)>0 ? `<div class="inventory-equipment-card"><strong>Terre noire : ${contaminationLevel(state)}/13</strong><p>${state.flags.physicianNotesRead ? "0–4 : appel puissant · 5–8 : équilibre précaire · 9–12 : transformation imminente · 13 : transformation." : "Effets inconnus."}</p></div>` : "";
+      return equipment + earth + testPanel + healing;
     },
 
     actionHtml(id, item, state) {
@@ -4756,50 +4795,57 @@ const STORY = {
       if (id === 'lame_noire') {
         return `<div class="inventory-actions"><button class="inventory-action-btn" data-action="equip-black-blade">Équiper la lame noire</button></div>`;
       }
-      if (id === 'potion_sombre') return `<div class="inventory-actions"><button class="inventory-action-btn" data-action="use-dark-potion" ${state.hp>=state.maxHp ? 'disabled' : ''}>Boire : +3 Vie, +2 terre noire</button></div>`;
+      if (id === 'potion_sombre') return `<div class="inventory-actions"><button class="inventory-action-btn" data-action="use-dark-potion" ${state.hp>=state.maxHp ? 'disabled' : ''}>Boire : +3 Vie, +2 terre noire${contaminationLevel(state)+2>=13 ? " — TRANSFORMATION" : ""}</button></div>`;
+      if (id === 'sacoche_terre_noire') return `<div class="inventory-actions"><p>Usage unique : +3 terre noire. Après absorption : ${Math.min(13, contaminationLevel(state)+3)}/13.</p><button class="inventory-action-btn" data-action="use-black-earth">Absorber la terre noire</button></div>`;
+      if (id === 'ampoule_blanche_commune') return `<div class="inventory-actions"><button class="inventory-action-btn" data-action="use-white-ampoule-common" ${contaminationLevel(state)>0 ? '' : 'disabled'}>Utiliser : −4 points de contamination (Terre noire)</button></div>`;
       if (id === 'ampoule_blanche') {
-        const useful = ((state.dexPenalty || 0) > 0 || contaminationLevel(state)>0);
-        return `<div class="inventory-actions"><button class="inventory-action-btn" data-action="use-white-ampoule" ${useful ? '' : 'disabled'}>Utiliser l’Ampoule blanche</button></div>`;
+        const useful = ((state.dexPenalty || 0) > 0 || state.flags.labInjected || contaminationLevel(state) > 0);
+        return `<div class="inventory-actions"><button class="inventory-action-btn" data-action="use-white-ampoule" ${useful ? '' : 'disabled'}>Utiliser : −4 points de contamination (Terre noire)</button></div>`;
+      }
+      if (id === 'collier_vitalite') {
+        return state.flags.collarEquipped
+          ? `<div class="inventory-actions"><strong>Incrusté dans la peau · +3 Vie max. · −1 Dextérité.</strong><p>Le retirer enlève 3 PV supplémentaires et provoque 1 blessure. Il sera inutilisable.</p><button class="inventory-action-btn" data-action="collar-tear-ask">Tenter de l’arracher</button></div>`
+          : '<div class="inventory-protection-state">Arraché — inutilisable.</div>';
+      }
+      if (id === 'sceau_silence') {
+        return '<p>Ancien objet V60, usage unique : peut interrompre un instant l’appel devant la grille.</p>';
       }
       if (PROTECTION_ITEMS[id]) {
         ensureProtectionState(state);
         const source = state.protectionItems[id] || { remaining: 0, max: PROTECTION_ITEMS[id].max };
         const broken = source.remaining <= 0;
-        return `<div class="inventory-protection-state">Protection restante : <strong>${source.remaining} / ${source.max}</strong>${broken ? '<br><strong>État : endommagé — désormais inutilisable.</strong>' : ''}</div>`;
+        return `<div class="inventory-protection-state">Protection restante : <strong>${source.remaining} / ${source.max}</strong>${id === 'bouclier_chevalier' ? (broken ? '<br>Malus de Dextérité annulé.' : '<br>Dextérité : −1 tant que le bouclier protège.') : ''}${broken ? '<br><strong>État : endommagé — désormais inutilisable.</strong>' : ''}</div>`;
       }
       return '';
     },
 
     handleAction(action, state, api) {
-      if (action.startsWith('test-toggle-item:')) {
-        const id = action.slice('test-toggle-item:'.length);
-        const entry = TEST_ITEM_CATALOG.find(item => item.id === id);
-        if (entry) {
-          setTestItem(state, entry, !testItemOwned(state, entry));
-          api.saveState();
-          api.render();
-          api.openInventory();
-        }
-        return true;
-      }
-
-      if (action.startsWith('test-equip-weapon:')) {
-        const weapon = action.slice('test-equip-weapon:'.length);
-        if (['none', 'heavy', 'light'].includes(weapon)) {
-          state.weapon = weapon;
-          api.saveState();
-          api.render();
-          api.openInventory();
-        }
-        return true;
-      }
-
       if (action === 'read-parchment') {
         api.showModal('Notes d’Aldren', `
           <img class="inventory-parchment-image" src="${api.book.assetBase}/objets/La-Grotte-de-Valombre-Parchemin.png" alt="Notes d’Aldren" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
           <div class="inventory-image-fallback">Ton image apparaîtra ici dès que tu ajouteras :<br><strong>books/ecuyer/01-la-grotte-de-valombre/images/objets/La-Grotte-de-Valombre-Parchemin.png</strong></div>
-          <div class="parchment-verse"><em>ne pas ouvrir l’œil</em><br><br><strong>soufre !!!</strong><br><small>Le mot « soufre » est entouré plusieurs fois, avec plusieurs traits nerveux et des points d’exclamation.</small><br><br><em>lame noire</em><br><br><em>derrière la paroi</em><br><em>terre noire</em><br><em>ne pas écouter</em><br><em>surtout ne pas—</em></div>
+          <div class="parchment-verse"><strong>IL FAUT OUVRIR L’ŒIL FERMÉ</strong><br><br><em>La lame noire. Trouver la lame noire.</em><br><br><s>La terre noire…</s><br><small>Ces mots sont barrés trois fois. Dans la marge, Aldren a ajouté : « ÉVITER ».</small><br><br><strong>SOUFRE !!! ☠</strong><br><small>Le mot est entouré trois fois de traits nerveux. Une tête de mort est dessinée à côté.</small></div>
           <button class="inventory-action-btn" data-action="back-inventory">Retour à l’inventaire</button>`);
+        return true;
+      }
+
+      if (action === 'collar-tear-ask') {
+        if (!state.flags.collarEquipped) { api.openInventory(); return true; }
+        api.showModal('Arracher le collier ?', `<p>Le métal s'est fondu dans ta peau. L'arracher ôtera les 3 points de Vie qu'il t'a apportés, puis te coûtera 1 point supplémentaire.</p><p><strong>Vie actuelle : ${state.hp}/${state.maxHp} · Vie après : ${Math.max(0, state.hp-4)}/${state.maxHp-3}.</strong></p>${state.hp <= 4 ? '<p><strong>Attention : cette action te tuera.</strong></p>' : ''}<p>Tu récupéreras le point de Dextérité perdu à cause du collier. Ce choix est irréversible.</p><div class="inventory-actions"><button class="inventory-action-btn" data-action="collar-tear-confirm">Confirmer : arracher le collier</button><button class="inventory-action-btn" data-action="back-inventory">Renoncer</button></div>`);
+        return true;
+      }
+      if (action === 'collar-tear-confirm') {
+        if (!state.flags.collarEquipped) { api.openInventory(); return true; }
+        state.flags.collarEquipped = false;
+        state.flags.collarTorn = true;
+        state.maxHp -= 3;
+        state.hp = Math.max(0, Math.min(state.maxHp, state.hp - 4));
+        if (hasItem(state, 'collier_vitalite')) {
+          state.inventory.collier_vitalite.description = 'Arraché — inutilisable. Le métal s’est fendu et a laissé une blessure au cou.';
+        }
+        api.saveState(); api.render();
+        if (state.hp <= 0) api.showModal('Le collier t’a tué', '<p>En arrachant le collier, tu as perdu tes dernières forces. Referme cette fenêtre pour reprendre au checkpoint ou recommencer.</p>');
+        else api.showModal('Le collier est arraché', '<p>Tu arraches le métal. La blessure te coûte 1 point de Vie, en plus des 3 points qui disparaissent avec son pouvoir. Tes mouvements redeviennent plus précis. La terre noire passée sous ta peau, elle, demeure.</p><button class="inventory-action-btn" data-action="back-inventory">Retour à l’inventaire</button>');
         return true;
       }
 
@@ -4827,18 +4873,27 @@ const STORY = {
       }
 
       if (action === 'use-dark-potion') {
-        if (hasItem(state,'potion_sombre') && state.hp<state.maxHp) {state.hp=Math.min(state.maxHp,state.hp+3);removeItem(state,'potion_sombre');raiseContamination(state,2);api.saveState();api.render();} api.openInventory();return true;
+        if (hasItem(state, 'potion_sombre') && state.hp < state.maxHp) { state.hp=Math.min(state.maxHp,state.hp+3); removeItem(state,'potion_sombre'); raiseContamination(state,2); api.saveState(); api.render(); }
+        api.openInventory(); return true;
+      }
+      if (action === 'use-black-earth') {
+        if (hasItem(state,'sacoche_terre_noire')) {
+          if (!state.flags.blackEarthUseConfirmed) { state.flags.blackEarthUseConfirmed=true; api.showModal('Absorber la terre noire ?', `<p>Ton niveau passerait de ${contaminationLevel(state)} à ${Math.min(13,contaminationLevel(state)+3)}/13. ${contaminationLevel(state)+3>=13 ? 'Tu te transformerais immédiatement : fin de partie.' : 'Cette décision est irréversible sans traitement.'}</p><button class="inventory-action-btn" data-action="confirm-black-earth">Confirmer</button>`); return true; }
+          removeItem(state,'sacoche_terre_noire'); raiseContamination(state,3); state.flags.blackEarthUseConfirmed=false; api.saveState(); api.render();
+        } api.openInventory(); return true;
+      }
+      if (action === 'confirm-black-earth') {
+        if (hasItem(state,'sacoche_terre_noire') && state.flags.blackEarthUseConfirmed) { removeItem(state,'sacoche_terre_noire'); raiseContamination(state,3); state.flags.blackEarthUseConfirmed=false; api.saveState(); api.render(); } return true;
+      }
+      if (action === 'use-white-ampoule-common') {
+        if (hasItem(state,'ampoule_blanche_commune') && contaminationLevel(state)>0) {removeItem(state,'ampoule_blanche_commune');state.contamination=Math.max(0,contaminationLevel(state)-4);state.flags.blackEarthContamination=state.contamination>0;api.saveState();api.render();} api.openInventory();return true;
       }
       if (action === 'use-white-ampoule') {
-        if (!hasItem(state, 'ampoule_blanche') || !((state.dexPenalty || 0) > 0 || contaminationLevel(state)>0)) {
+        if (!hasItem(state, 'ampoule_blanche') || !((state.dexPenalty || 0) > 0 || state.flags.labInjected || contaminationLevel(state) > 0)) {
           api.openInventory();
           return true;
         }
-        removeItem(state, 'ampoule_blanche');
-        if ((state.dexPenalty || 0) > 0) state.dexPenalty = Math.max(0, state.dexPenalty - 1);
-        state.contamination=Math.max(0,contaminationLevel(state)-4);
-        state.flags.blackEarthContamination=state.contamination>0;
-        state.flags.usedWhiteAmpoule = true;
+        blackEarthTreatment(state);
         api.saveState();
         api.render();
         api.openInventory();
@@ -4864,6 +4919,10 @@ const STORY = {
       const remaining = state.protectionItems.gantelet_veilleur?.remaining || 0;
       armor.push(`Gantelet de Veilleur — ${remaining}/1${remaining <= 0 ? ' · endommagé' : ''}`);
     }
+    if (hasItem(state, 'bouclier_chevalier')) {
+      const remaining = state.protectionItems.bouclier_chevalier?.remaining || 0;
+      armor.push(`Bouclier du chevalier — ${remaining}/6${remaining <= 0 ? ' · brisé, sans malus' : ' · Dextérité −1'}`);
+    }
     return `
       <div class="character-modal-sheet">
         <div class="character-modal-portrait">
@@ -4876,6 +4935,7 @@ const STORY = {
           <div><span>🛡 Protection</span><strong>${currentProtection(state)} / ${maxProtection(state)}</strong></div>
           <div><span>Force</span><strong>${force}</strong></div>
           <div><span>Dextérité</span><strong>${dexterity}</strong></div>
+          ${contaminationLevel(state)>0 ? `<div><span>Terre noire</span><strong>${contaminationLevel(state)} / 13 · ${state.flags.physicianNotesRead ? "Voir les notes du médecin" : "Effets inconnus"}</strong></div>` : ""}
           <div><span>Puissance de l’arme</span><strong>${weaponPower}</strong></div>
         </div>
         <div class="character-modal-equipment">
@@ -4896,27 +4956,37 @@ const STORY = {
     title: 'La Grotte de Valombre',
     description: 'Première aventure de la série de l’Écuyer.',
     access: 'free',
-    contentVersion: 27,
-    saveVersion: 18, // Ancien identifiant V40 : migration uniquement. Ne plus l'incrémenter pour une publication.
+    contentVersion: 59,
     stablePlayerSaves: true,
     playerRelease: true,
+    demoEndNode: 'c104',
+    pageMapVersion: 72,
+    saveVersion: 18,
     assetBase: './books/ecuyer/01-la-grotte-de-valombre/images',
+    showMissingIllustrationPlaceholder: false, // pas de placeholder visible dans la version Joueurs
     story: STORY,
     pageOrder: PAGE_ORDER,
     pageByNode: PAGE_BY_NODE,
+    navigationTitles: PAGE_NAV_TITLES,
     padPage,
     imageBaseForPage: n => `La-Grotte-de-Valombre-${padPage(n)}`,
-    imageExtensions: ['webp', 'png'],
+    // Règle V68.1 : une page n'affiche QUE le fichier portant son propre numéro.
+    // Les anciens numéros de scènes et le suffixe historique -V63 sont exclus.
+    imageCandidatesForPage: n => {
+      const filename = `La-Grotte-de-Valombre-${padPage(n)}`;
+      return n <= 47
+        ? [filename, `pages/${filename}`]
+        : [`pages/${filename}`, filename];
+    },
+    imageExtensions: ['webp', 'png', 'jpg', 'jpeg'],
     createInitialState,
+    migrateState: migratePageNumbersV72,
     rules: { currentForce, currentDexterity, combatPower, weaponLabel, currentProtection, maxProtection, applyDamage, raiseContamination },
     characterSheetHtml,
     inventory,
     checkpoints: [
       { node: 'c20', label: 'Entrée de la grotte', onlyIfNone: true }
     ],
-    // Migration automatique des parties V40 (ancienne clé versionnée).
-    // Ne pas supprimer ces références dans les prochaines versions : un
-    // joueur peut passer directement de V40 à V45 sans installer les étapes.
     legacyStorageKeys: ['ldveh.book.ecuyer-01-player-test.save.v18'],
     legacyCheckpointKeys: ['ldveh.book.ecuyer-01-player-test.checkpoint.v18'],
     exportSeriesMemory(state) {

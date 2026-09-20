@@ -1,15 +1,15 @@
 {
-  "id": "ecuyer-01",
+  "id": "ecuyer-01-player-test",
   "seriesId": "ecuyer",
   "orderInSeries": 1,
   "title": "La Grotte de Valombre",
   "access": "free",
-  "contentVersion": 28,
+  "contentVersion": 59,
   "entry": "book.js",
   "assetBase": "images",
   "episode": 1,
   "slug": "la-grotte-de-valombre",
   "saveVersion": 18,
-  "buildLabel": "V62 — Carte compacte · Joueurs · pages 001–040",
-  "pageMapVersion": 59
+  "buildLabel": "V68.24 — Joueurs · pages 000–104 · branches annexes accessibles",
+  "pageMapVersion": 72
 }
