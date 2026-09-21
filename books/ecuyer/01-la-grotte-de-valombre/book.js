@@ -576,6 +576,8 @@ function sentinelRound(state, target, blade) {
   if (blade && (state.throwingBlades || 0) <= 0) return;
   const report = [];
   let heroDice, heroScore, success = false;
+  let targetDice = null, targetScore = null;
+  const otherSentinelRolls = [];
   if (blade) {
     state.throwingBlades -= 1;
     syncThrowingBlades(state);
@@ -591,13 +593,13 @@ function sentinelRound(state, target, blade) {
   } else {
     heroDice = roll2D6();
     heroScore = currentDexterity(state) + heroDice[0] + heroDice[1];
-    const enemyDice = roll2D6();
-    const enemyScore = SENTINELS.dexterity + enemyDice[0] + enemyDice[1];
-    if (heroScore > enemyScore) {
+    targetDice = roll2D6();
+    targetScore = SENTINELS.dexterity + targetDice[0] + targetDice[1];
+    if (heroScore > targetScore) {
       const damage = Math.min(f.hp[target], forceDamageBonus(currentForce(state)) + (state.weapon === 'none' ? 0 : combatPower(state)));
       f.hp[target] -= damage;
       report.push(`Tu touches la sentinelle ${target + 1} : ${damage} dégâts.`);
-    } else if (heroScore < enemyScore) {
+    } else if (heroScore < targetScore) {
       const result = applyDamage(state, 1);
       if (result.hpLost > 0 && !f.contaminated) { raiseContamination(state, 1); f.contaminated = true; }
       report.push(`La sentinelle ${target + 1} te touche : ${result.absorbed} absorbé, ${result.hpLost} Vie perdue.`);
@@ -607,6 +609,7 @@ function sentinelRound(state, target, blade) {
       if (f.hp[i] <= 0 || i === target || state.hp <= 0) continue;
       const enemyDice = roll2D6();
       const enemyScore = SENTINELS.dexterity + enemyDice[0] + enemyDice[1];
+      otherSentinelRolls.push({ index: i, dice: [...enemyDice], score: enemyScore });
       if (enemyScore > heroScore) {
         const result = applyDamage(state, 1);
         if (result.hpLost > 0 && !f.contaminated) { raiseContamination(state, 1); f.contaminated = true; }
@@ -615,7 +618,7 @@ function sentinelRound(state, target, blade) {
     }
   }
   f.round++;
-  f.last = { heroDice, heroScore, report, target, blade, success, bladeDexterity: blade ? state.lastStat : null, hp: [...f.hp], heroHp: state.hp };
+  f.last = { heroDice, heroScore, targetDice, targetScore, otherSentinelRolls, report, target, blade, success, bladeDexterity: blade ? state.lastStat : null, hp: [...f.hp], heroHp: state.hp };
 }
 
 function sentinelChoices(state) {
@@ -639,7 +642,21 @@ function sentinelResultChoices(state) {
 function sentinelResultHtml(state) {
   const f = ensureSentinels(state);
   if (!f.last) return '';
-  return `<div class="combat-roll-result"><div class="combat-roll-title">${f.last.blade ? 'Lame de jet' : `Échange n° ${f.round}`}</div><p>${f.last.blade ? `Jet de Dextérité : ${f.last.heroDice.join(' + ')} = ${f.last.heroScore} · Seuil : ${f.last.bladeDexterity}` : `Ton jet : ${f.last.heroDice.join(' + ')} · Attaque : ${f.last.heroScore}`}</p>${f.last.report.map(r=>`<p>${r}</p>`).join('')}<p><strong>Ta Vie : ${state.hp}/${state.maxHp}. Terre noire : ${contaminationLevel(state)}/13.</strong></p></div>`;
+  const r = f.last;
+  // Montrer les dés effectivement lancés, jamais effectuer un nouveau tirage dans le rendu.
+  // Les anciennes sauvegardes possèdent heroDice mais pas les dés des sentinelles.
+  const diceHtml = dice => Array.isArray(dice) && dice.length
+    ? `<div class="combat-dice">${dice.map(renderDie).join('')}</div>` : '';
+  const heroTotal = Array.isArray(r.heroDice) ? r.heroDice.reduce((a, b) => a + b, 0) : 0;
+  const rolls = r.blade
+    ? `<div class="combat-side"><strong>TON LANCER</strong>${diceHtml(r.heroDice)}<p>3 dés : ${heroTotal} · Dextérité : ${r.bladeDexterity}</p><p class="combat-total"><strong>${r.success ? 'Réussite' : 'Échec'}</strong></p></div>`
+    : `<div class="combat-roll-grid">
+         <div class="combat-side"><strong>TOI</strong>${diceHtml(r.heroDice)}<p>Dextérité ${r.heroScore - heroTotal} + dés ${heroTotal}</p><p class="combat-total">Attaque : <strong>${r.heroScore}</strong></p></div>
+         <div class="combat-versus">VS</div>
+         <div class="combat-side"><strong>SENTINELLE ${r.target + 1}</strong>${diceHtml(r.targetDice)}${Array.isArray(r.targetDice) ? `<p>Dextérité ${SENTINELS.dexterity} + dés ${r.targetDice.reduce((a,b)=>a+b,0)}</p><p class="combat-total">Attaque : <strong>${r.targetScore}</strong></p>` : '<p>Jet adverse non conservé dans cette ancienne sauvegarde.</p>'}</div>
+       </div>
+       ${(r.otherSentinelRolls || []).map(a => `<div class="combat-secondary-roll"><strong>Attaque de la sentinelle ${a.index + 1}</strong>${diceHtml(a.dice)}<p>Dextérité ${SENTINELS.dexterity} + dés ${a.dice.reduce((x,y)=>x+y,0)} · Attaque : <strong>${a.score}</strong> contre ${r.heroScore}</p></div>`).join('')}`;
+  return `<div class="combat-roll-result"><div class="combat-roll-title">${r.blade ? 'Lame de jet' : `Échange n° ${f.round}`}</div>${rolls}<div class="combat-outcome">${r.report.map(line=>`<p>${line}</p>`).join('')}</div><div class="combat-life-line">Ta Vie : <strong>${state.hp}/${state.maxHp}</strong> · Terre noire : <strong>${contaminationLevel(state)}/13</strong></div></div>`;
 }
 
 function heroGender(state) {
@@ -3959,7 +3976,7 @@ const STORY = {
       <p>Un plan des galeries couvre le mur du poste. Sur un pupitre, les premiers registres parlent de rondes, de réserves et de surveillance des accès.</p>
       <p>Puis viennent des consignes concernant ceux qui entendent l'appel :</p>
       <blockquote>TOUTE PERSONNE ENTENDANT L’APPEL DOIT ÊTRE CONDUITE AUX SALLES DE SOINS.</blockquote>
-      <p>Plus loin, une autre main ordonne d'isoler toute personne attirée vers la prison.</p>
+      <p>Plus loin, un registre porte une consigne : « Isoler toute personne attirée vers la prison. »</p>
       <p>D’autres manuscrits remplissent une étagère. Au vu de leur nombre, les examiner tous te prendrait beaucoup de temps. Tu ne sais toujours pas si Aldren est en vie.</p>`,
     choices: [
       { label: 'Rester et examiner les autres manuscrits', to: 'c78', effect: s => { s.flags.quartersGuard = true; s.flags.guardStayed = true; } },
@@ -4307,7 +4324,7 @@ const STORY = {
     title: 'Les défenses du sceau',
     image: 'Le mécanisme des gardiens',
     text: `
-      <p>Les trois chemins débouchent dans une salle ronde.</p>
+      <p>Tu débouches dans une salle ronde.</p>
       <p>Au centre, une table de pierre porte un plan gravé de la grotte. Plusieurs chemins mènent vers la surface. Ils sont barrés d'un trait profond, comme si les Veilleurs en avaient condamné les accès.</p>
       <p>Ont-ils été fermés pour protéger la vallée ? Leur fermeture a-t-elle participé à son déclin ?</p>
       <p>Plus bas sur le plan, une porte monumentale est dessinée. À côté, une inscription :</p>
@@ -6145,7 +6162,7 @@ const STORY = {
       }
       if (id === 'collier_vitalite') {
         return state.flags.collarEquipped
-          ? `<div class="inventory-actions"><strong>Incrusté dans la peau · +3 Vie max. · −1 Dextérité.</strong><p>Le retirer enlève 3 PV supplémentaires et provoque 1 blessure. Il sera inutilisable.</p><button class="inventory-action-btn" data-action="collar-tear-ask">Tenter de l’arracher</button></div>`
+          ? `<div class="inventory-actions"><button class="inventory-action-btn" data-action="collar-tear-ask">Tenter de l’arracher</button></div>`
           : '<div class="inventory-protection-state">Arraché — inutilisable.</div>';
       }
       if (id === 'sceau_silence') {

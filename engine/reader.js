@@ -229,50 +229,31 @@ function loadPageImage(pageNumber, title) {
   tryNext();
 }
 
-/* Journal de bord : connaissances débloquées à la lecture, sans carte ni embranchements révélés. */
+/* Journal de bord : uniquement les découvertes de la partie en cours.
+   La sauvegarde du récit contient déjà history/visited/flags : aucun stockage
+   cumulatif séparé, ni réimport des indices d'une tentative antérieure. */
 const JOURNAL_ENTRIES = Array.isArray(BOOK.journalEntries) ? BOOK.journalEntries : [];
-const JOURNAL_KEY = `ldveh.book.${BOOK.id}.${BOOK.saveScope ? BOOK.saveScope + '.' : ''}journal.v1`;
-const LEGACY_ATLAS_KEY = `ldveh.book.${BOOK.id}.${BOOK.saveScope ? BOOK.saveScope + '.' : ''}atlas.v1`;
 const journalList = document.getElementById('journalList');
 const journalCount = document.getElementById('journalCount');
-const journalIndex = new Map(JOURNAL_ENTRIES.map(entry => [entry.id, entry]));
-function loadJournal() {
-  let entries = [];
-  try {
-    const stored = JSON.parse(localStorage.getItem(JOURNAL_KEY));
-    if (stored && Array.isArray(stored.entries)) entries = stored.entries;
-    else {
-      // Importer uniquement les découvertes déjà débloquées sur l'ancienne carte.
-      const legacy = JSON.parse(localStorage.getItem(LEGACY_ATLAS_KEY));
-      if (legacy && Array.isArray(legacy.facts)) entries = legacy.facts;
-    }
-  } catch (error) { /* Une sauvegarde corrompue ne doit pas bloquer le récit. */ }
-  return {entries:[...new Set(entries.filter(id => typeof id === 'string' && journalIndex.has(id)))]};
-}
-let journalMemory = loadJournal();
-function saveJournal() {
-  try { localStorage.setItem(JOURNAL_KEY, JSON.stringify(journalMemory)); } catch (error) {}
-}
-function syncJournal() {
+function currentRunJournalEntries() {
   const encountered = new Set(Array.isArray(state.history) ? state.history : []);
   if (state.node && state.node !== 'start') encountered.add(state.node);
   for (const [nodeId, seen] of Object.entries(state.visited || {})) if (seen) encountered.add(nodeId);
-  const recorded = new Set(journalMemory.entries);
-  let updated = false;
+  const recorded = new Set();
+  const entries = [];
   for (const page of encountered) {
     for (const entry of JOURNAL_ENTRIES) {
       if (entry.page !== page || recorded.has(entry.id)) continue;
       if (entry.requiresFlag && !state.flags?.[entry.requiresFlag]) continue;
-      journalMemory.entries.push(entry.id);
+      entries.push(entry);
       recorded.add(entry.id);
-      updated = true;
     }
   }
-  if (updated) saveJournal();
+  return entries;
 }
 function renderJournal() {
   journalList.replaceChildren();
-  const entries = journalMemory.entries.map(id => journalIndex.get(id)).filter(Boolean);
+  const entries = currentRunJournalEntries();
   journalCount.textContent = entries.length === 0 ? 'Aucune découverte pour le moment.'
     : `${entries.length} découverte${entries.length > 1 ? 's' : ''} consignée${entries.length > 1 ? 's' : ''}`;
   if (!entries.length) {
@@ -295,7 +276,6 @@ function renderJournal() {
   });
 }
 function openJournal() {
-  syncJournal();
   renderJournal();
   journalPanel.classList.remove('hidden');
   journalPanel.setAttribute('aria-hidden', 'false');
@@ -380,7 +360,6 @@ function render() {
     });
     choices.appendChild(btn);
   });
-  syncJournal();
 }
 
 function restartGame() {

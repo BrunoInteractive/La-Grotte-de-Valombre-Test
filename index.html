@@ -1232,6 +1232,17 @@ button { font: inherit; }
 .journal-entry p {font-size:clamp(15px,2.8vw,17px);line-height:1.5;margin:0;color:#3c3024;}
 .journal-empty {font-style:italic;color:#695740;line-height:1.5;}
 @media(max-width:620px){.journal-panel{padding:7px}.journal-sheet{width:100%;max-height:calc(100dvh - 14px)}.journal-head{padding:16px 13px 12px}.journal-content{padding:10px 13px 20px}.journal-entry{padding:12px}}
+/* V68.51 — sentinelles : affichage des dés enregistrés */
+
+/* V68.51 — Résultats de combat : deuxième sentinelle. */
+.combat-secondary-roll {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(122,91,56,.28);
+  text-align: center;
+}
+.combat-secondary-roll > strong {display:block;font-size:14px;color:#4f3825;}
+.combat-secondary-roll p {margin:4px 0;font-size:14px;}
 </style>
 </head>
 <body>
@@ -1306,7 +1317,7 @@ button { font: inherit; }
 
   <script src="./engine/core.js"></script>
   <script src="./app/catalog.js"></script>
-  <script src="./books/ecuyer/01-la-grotte-de-valombre/book.js?v=6848"></script>
+  <script src="./books/ecuyer/01-la-grotte-de-valombre/book.js?v=6851"></script>
   <script src="./books/ecuyer/01-la-grotte-de-valombre/journal.js?v=6847"></script>
   <script src="./engine/reader.js?v=6844"></script>
 </body>

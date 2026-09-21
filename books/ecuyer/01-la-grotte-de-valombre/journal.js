@@ -36,7 +36,7 @@
     "id": "etranger:c19",
     "page": "c19",
     "title": "Étranger",
-    "text": "Un étranger raconte que les habitants de Rochebrume disparaissent un par un. Son propre visage devient impossible à se rappeler dès qu’on détourne les yeux."
+    "text": "Un étranger raconte que les habitants de Rochebrume disparaissent un par un."
   },
   {
     "id": "camp:c28",
