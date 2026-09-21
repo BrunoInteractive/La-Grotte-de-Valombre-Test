@@ -10,9 +10,9 @@ GameRuntime.setActiveBook(BOOK);
 const STORY = BOOK.story;
 const PAGE_BY_NODE = BOOK.pageByNode;
 const padPage = BOOK.padPage;
-const STORAGE_KEY = BOOK.stablePlayerSaves ? `ldveh.book.${BOOK.id}.save` : `ldveh.book.${BOOK.id}.save.v${BOOK.saveVersion || 1}`;
-const CHECKPOINT_KEY = BOOK.stablePlayerSaves ? `ldveh.book.${BOOK.id}.checkpoint` : `ldveh.book.${BOOK.id}.checkpoint.v${BOOK.saveVersion || 1}`;
-const SERIES_KEY = `ldveh.series.${BOOK.seriesId}.profile.v2`;
+const STORAGE_KEY = `ldveh.book.${BOOK.id}.${BOOK.saveScope ? BOOK.saveScope + '.' : ''}save.v${BOOK.saveVersion || 1}`;
+const CHECKPOINT_KEY = `ldveh.book.${BOOK.id}.${BOOK.saveScope ? BOOK.saveScope + '.' : ''}checkpoint.v${BOOK.saveVersion || 1}`;
+const SERIES_KEY = `ldveh.series.${BOOK.seriesId}.${BOOK.saveScope ? BOOK.saveScope + '.' : ''}profile.v2`;
 
 const chapterNumber = document.getElementById('chapterNumber');
 const chapterTitle = document.getElementById('chapterTitle');
@@ -105,9 +105,7 @@ function loadState() {
       BOOK.migrateState(previous);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(previous));
     }
-    const restored = { ...defaultState(), ...previous };
-    if (!STORY[restored.node] || (BOOK.playerRelease && /^c\d+$/.test(restored.node) && !Object.prototype.hasOwnProperty.call(PAGE_BY_NODE, restored.node))) restored.node='start';
-    return restored;
+    return { ...defaultState(), ...previous };
   } catch { return defaultState(); }
 }
 let state = loadState();
@@ -157,7 +155,7 @@ function restartFromCheckpoint() {
       localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(previous));
     }
     state = { ...defaultState(), ...previous };
-    if (!STORY[state.node] || (BOOK.playerRelease && /^c\d+$/.test(state.node) && !Object.prototype.hasOwnProperty.call(PAGE_BY_NODE,state.node))) state.node='start';
+    if (BOOK.demoEndNode && state.node === BOOK.demoEndNode) state.node = 'start';
     if (typeof atlasMemory !== 'undefined') {atlasMemory.lastShown=''; atlasSaveMemory();}
     state.journal = journalBackup || state.journal || '';
     saveState(); closeDrawer(); closeModal(); closeAtlas(); render();
@@ -174,11 +172,16 @@ function maybeAutoCheckpoint(id) {
 
 function enterNode(id) {
   const node = STORY[id];
-  if (!node || (BOOK.playerRelease && /^c\d+$/.test(id) && !Object.prototype.hasOwnProperty.call(PAGE_BY_NODE,id))) return;
+  if (!node || (BOOK.demoEndNode && state.node === BOOK.demoEndNode)) return;
   state.node = id;
   if (!state.visited[id]) {
     state.visited[id] = true;
     if (typeof node.onEnter === 'function') node.onEnter(state);
+  } else if (id === 'c115' && state.flags?.knightFate === 'locked' &&
+             !state.flags.knightWellAttackDone && typeof node.onEnter === 'function') {
+    // Travail uniquement : une nouvelle décision lors d'un essai relance
+    // la conséquence différée du chevalier, même si ce palier était déjà visité.
+    node.onEnter(state);
   }
   state.history.push(id);
   maybeAutoCheckpoint(id);
@@ -229,7 +232,7 @@ function loadPageImage(pageNumber, title) {
 
 /* Carte narrative V62. Sauvegarde indépendante pour garder les découvertes entre les essais. */
 const ATLAS = BOOK.adventureMap;
-const ATLAS_KEY = `ldveh.book.${BOOK.id}.atlas.v1`;
+const ATLAS_KEY = `ldveh.book.${BOOK.id}.${BOOK.saveScope ? BOOK.saveScope + '.' : ''}atlas.v1`;
 const atlasDetails = document.getElementById('atlasDetails');
 const atlasPoints = document.getElementById('atlasPoints');
 const atlasLines = document.getElementById('atlasLines');
@@ -377,7 +380,7 @@ function atlasShowDetails(area) {
     const item=document.createElement('div');item.className='atlas-fact';
     const text=document.createElement('p');text.textContent=note.text;item.appendChild(text);
     if (ATLAS.mode === 'work') {
-      const page=document.createElement('small');page.textContent=`Page ${note.page.slice(1).padStart(3,'0')}`;item.appendChild(page);
+      const page=document.createElement('small');page.textContent=`Page ${padPage(PAGE_BY_NODE[note.page] ?? Number(note.page.slice(1)))}`;item.appendChild(page);
     }
     atlasDetails.appendChild(item);
   });
@@ -542,11 +545,7 @@ function render() {
     labels.forEach(label => { const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = label; statusTags.appendChild(tag); });
   }
 
-  const rawChoices = state.flags?.blackEarthTransformed && !node.sheet ? [{label:"Reprendre au dernier point de sauvegarde",action:"checkpoint"},{label:"Recommencer depuis le début",action:"restart"}] : state.hp <= 0 && !node.sheet ? fatalChoices() : typeof node.choices === 'function' ? node.choices(state) : (node.choices || []);
-  const availableChoices = BOOK.playerRelease ? rawChoices.filter(choice => !choice.to || Object.prototype.hasOwnProperty.call(PAGE_BY_NODE,choice.to)) : rawChoices;
-  if (BOOK.playerRelease && state.node === BOOK.demoEndNode && state.hp > 0 && !state.flags?.blackEarthTransformed) {
-    storyText.insertAdjacentHTML('beforeend', '<p class="ending">FIN DE CETTE VERSION D’ESSAI</p><p>Ta progression est enregistrée. Tu pourras poursuivre cette aventure avec ton personnage, ton inventaire et tes choix dès la publication de la suite.</p>');
-  }
+  const availableChoices = state.flags?.blackEarthTransformed && !node.sheet ? [{label:"Reprendre au dernier point de sauvegarde",action:"checkpoint"},{label:"Recommencer depuis le début",action:"restart"}] : state.hp <= 0 && !node.sheet ? fatalChoices() : typeof node.choices === 'function' ? node.choices(state) : (node.choices || []);
   if (state.flags?.blackEarthTransformed && !node.sheet) {
     storyText.innerHTML = '<p>La terre noire gagne ton corps. Tes membres se déforment, et la voix du Dormeur s’éteint pour toujours. Tu es devenu l’un des gardiens de la prison.</p><p><strong>Fin de l’aventure : transformation à 13 points.</strong></p>';
   }
@@ -619,12 +618,16 @@ function openInventory() {
 function closeModal() { modal.classList.add('hidden'); modalBackdrop.classList.add('hidden'); }
 
 function pageNavigationEntries() {
-  if (BOOK.playerRelease) return [];
   return Object.entries(PAGE_BY_NODE)
     .map(([nodeId, pageNumber]) => ({
       nodeId,
       pageNumber,
-      title: BOOK.navigationTitles?.[nodeId] || STORY[nodeId]?.title || `Page ${padPage(pageNumber)}`
+      // Le titre visible du récit est la source de vérité. Le libellé TEST
+      // sert uniquement de description quand la page n'a pas de titre.
+      // Le prologue conserve son libellé explicite dans la navigation.
+      title: (pageNumber === 0 ? BOOK.navigationTitles?.[nodeId] : STORY[nodeId]?.title?.trim())
+        || BOOK.navigationTitles?.[nodeId]
+        || `Page ${padPage(pageNumber)}`
     }))
     .sort((a, b) => a.pageNumber - b.pageNumber);
 }
@@ -646,7 +649,6 @@ function renderPageNavigation() {
 }
 
 function jumpToPageForTest(nodeId) {
-  if (BOOK.playerRelease) return;
   if (!STORY[nodeId] || !Number.isInteger(PAGE_BY_NODE[nodeId])) return;
   // Outil de test : on change uniquement la page courante.
   // Aucun effet de choix/onEnter/checkpoint antérieur n'est déclenché automatiquement.
@@ -693,7 +695,7 @@ window.addEventListener('resize', () => {
 journalBtn.addEventListener('click', () => openAtlas());
 journalCloseBtn.addEventListener('click', closeAtlas);
 restartBtn.addEventListener('click', restartGame);
-if (menuBtn) menuBtn.addEventListener('click', openDrawer);
+if (menuBtn && !BOOK.demoEndNode) menuBtn.addEventListener('click', openDrawer);
 if (closeDrawerBtn) closeDrawerBtn.addEventListener('click', closeDrawer);
 if (drawerBackdrop) drawerBackdrop.addEventListener('click', closeDrawer);
 closeModalBtn.addEventListener('click', closeModal);

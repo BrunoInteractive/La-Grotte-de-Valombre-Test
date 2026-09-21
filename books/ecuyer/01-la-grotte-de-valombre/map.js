@@ -1,11 +1,11 @@
-/* Carte Joueurs V68.24 : aucun lieu ou indice encore non publié. */
+/* Carte narrative V68.41 — parcours des quartiers linéaire, choix de manuscrits conservé. */
 (function(){
-  const book = BookRegistry.get("ecuyer-01-player-test");
+  const book = BookRegistry.get("ecuyer-01");
   if (book) book.adventureMap = {
   "mode": "player",
-  "version": 4,
+  "version": 7,
   "width": 680,
-  "height": 1822,
+  "height": 3070,
   "nodes": [
     {
       "id": "ecuries",
@@ -445,7 +445,7 @@
       "notes": [
         {
           "page": "c70",
-          "text": "Une fresque montre des hommes et des femmes construisant les maisons et les rues de la cité. D’anciennes routes la relient à la surface ; les bâtisseurs se rassemblent ensuite autour d’une ouverture sous la ville."
+          "text": "Une fresque montre des hommes et des femmes construisant les maisons et les rues de la cité. D’anciennes routes la relient à la surface, les bâtisseurs se rassemblent ensuite autour d’une ouverture sous la ville."
         },
         {
           "page": "c71",
@@ -512,11 +512,11 @@
       "notes": [
         {
           "page": "c77",
-          "text": "Une consigne demande d’éviter la terre noire et de conduire les personnes contaminées aux salles de soins ; une autre ordonne d’isoler les personnes attirées vers la prison."
+          "text": "Une consigne demande d’éviter la terre noire et de conduire les personnes contaminées aux salles de soins, une autre ordonne d’isoler les personnes attirées vers la prison."
         },
         {
           "page": "c78",
-          "text": "Un registre décrit deux gardes volontairement contaminés. Ils ne répondent plus à l’appel ; leurs corps se sont déformés et ils ont été enfermés près du poste."
+          "text": "Un registre décrit deux gardes volontairement contaminés. Ils ne répondent plus à l’appel, leurs corps se sont déformés et ils ont été enfermés près du poste."
         }
       ]
     },
@@ -627,42 +627,61 @@
       "notes": [
         {
           "page": "c99",
-          "text": "Les Veilleurs ont d’abord essayé d’aider les voyageurs attirés par l’emprise. Ils ont ensuite expérimenté sur des corps avec de la terre noire."
+          "text": "Les dossiers révèlent des soins d’abord destinés aux victimes de l’appel, puis des expériences de transformation."
         },
         {
-          "page": "c100",
-          "text": "La machine du laboratoire est conçue pour injecter de la terre noire directement dans le corps."
+          "page": "c101",
+          "text": "Les derniers registres évoquent la fabrication de gardiens par les Veilleurs."
         }
       ]
     },
     {
       "id": "ampoule",
-      "label": "Ampoule blanche",
+      "label": "Salle des injections",
       "x": 550,
       "y": 1515,
       "pages": [
         "c102",
-        "c138"
+        "c103",
+        "c138",
+        "c151",
+        "c196"
       ],
       "notes": [
         {
           "page": "c102",
-          "text": "Une ampoule blanche réduit de quatre points la contamination, sans guérir les blessures. L’emprise du Dormeur peut alors reprendre de la force."
+          "text": "Des machines injectent la terre noire. Les installations ressemblent davantage à une salle de torture qu’à un lieu de soin."
+        },
+        {
+          "page": "c151",
+          "text": "L’ancien bras d’injection se brise après activation : un échec coûte une Vie et deux points de terre noire."
+        },
+        {
+          "page": "c196",
+          "text": "Une bague lumineuse peut être récupérée une seule fois sous le mécanisme brisé : +2 Dextérité.",
+          "requiresFlag": "labRingTaken"
         }
       ]
     },
     {
       "id": "registres",
-      "label": "Registres des gardiens",
+      "label": "Le jeune chevalier",
       "x": 550,
       "y": 1610,
       "pages": [
-        "c103"
+        "c197",
+        "c198",
+        "c199",
+        "c200"
       ],
       "notes": [
         {
-          "page": "c103",
-          "text": "Les registres indiquent que les Veilleurs ont délibérément transformé des êtres vivants en gardiens. Plusieurs sujets sont morts ; d’autres ne répondent plus à l’appel."
+          "page": "c198",
+          "text": "Un très jeune chevalier en larmes affirme avoir voulu défier la malédiction. Il ne sait plus depuis combien de temps il est enfermé."
+        },
+        {
+          "page": "c199",
+          "text": "Lui tendre la main exige un test de Dextérité : réussite, il s’effondre, échec, le tentacule écrase le poignet et fait perdre un point de Dextérité."
         }
       ]
     },
@@ -680,6 +699,283 @@
           "text": "Un plan gravé montre des routes vers la surface, barrées. Une inscription indique que la terre noire entretient le sceau de la prison."
         }
       ]
+    },
+    {
+      "id": "medecin",
+      "label": "Registre du médecin",
+      "x": 372,
+      "y": 1801,
+      "pages": [
+        "c105"
+      ],
+      "notes": [
+        {
+          "page": "c105",
+          "text": "Le médecin note trois niveaux d’exposition : 0–3, appel puissant, 5–8, appel intermittent, 9–12, presque silencieux mais transformation menaçante. À 13, aucun retour observé."
+        }
+      ]
+    },
+    {
+      "id": "carrefour_soins",
+      "label": "Carrefour des soins",
+      "x": 372,
+      "y": 1860,
+      "pages": [
+        "c106"
+      ],
+      "notes": []
+    },
+    {
+      "id": "secours",
+      "label": "Poste de secours",
+      "x": 260,
+      "y": 1935,
+      "pages": [
+        "c107",
+        "c139",
+        "c184",
+        "c185",
+        "c186",
+        "c187",
+        "c188",
+        "c189"
+      ],
+      "notes": [
+        {
+          "page": "c107",
+          "text": "Une ampoule blanche intacte permet de réduire la contamination de quatre points, sans soigner les blessures."
+        }
+      ]
+    },
+    {
+      "id": "reserve",
+      "label": "Réserve de terre noire",
+      "x": 484,
+      "y": 1935,
+      "pages": [
+        "c108",
+        "c190",
+        "c140",
+        "c191",
+        "c192",
+        "c193",
+        "c194",
+        "c195"
+      ],
+      "notes": [
+        {
+          "page": "c108",
+          "text": "Une petite sacoche contient une dose de terre noire. L’absorber augmenterait la contamination de trois points."
+        }
+      ]
+    },
+    {
+      "id": "grille",
+      "label": "Grille condamnée",
+      "x": 372,
+      "y": 2027,
+      "pages": [
+        "c109",
+        "c148",
+        "c110",
+        "c111"
+      ],
+      "notes": [
+        {
+          "page": "c110",
+          "text": "Un coffre renferme des dizaines de parchemins identiques appelant à libérer l’esprit et demandant des preuves de sa prétendue malveillance."
+        },
+        {
+          "page": "c111",
+          "text": "Le journal des confiscations évoque des arrestations, une révolte grandissante et des gardes refusant d’obéir. Son rédacteur finit par douter de la version officielle."
+        }
+      ]
+    },
+    {
+      "id": "avenue",
+      "label": "Avenue basse",
+      "x": 372,
+      "y": 2114,
+      "pages": [
+        "c112",
+        "c113"
+      ],
+      "notes": []
+    },
+    {
+      "id": "puits",
+      "label": "Puits des Veilleurs",
+      "x": 372,
+      "y": 2187,
+      "pages": [
+        "c114",
+        "c115",
+        "c141",
+        "c142",
+        "c143"
+      ],
+      "notes": [
+        {
+          "page": "c115",
+          "requiresFlag": "knightWellAttackDone",
+          "text": "Le chevalier laissé enfermé a forcé la porte et a attaqué pendant la descente du puits. La corde peut arrêter la chute, sans empêcher la blessure ni la contamination."
+        }
+      ]
+    },
+    {
+      "id": "porte",
+      "label": "Porte sous la ville",
+      "x": 372,
+      "y": 2260,
+      "pages": [
+        "c116"
+      ],
+      "notes": [
+        {
+          "page": "c116",
+          "text": "La porte porte l’œil fermé et une petite lame noire, gravée plus récemment. Une empreinte de botte mène vers l’intérieur."
+        }
+      ]
+    },
+    {
+      "id": "profondeurs",
+      "label": "Sous la Cité morte",
+      "x": 372,
+      "y": 2327,
+      "pages": [
+        "c117"
+      ],
+      "notes": [
+        {
+          "page": "c117",
+          "text": "Des marques de l’œil fermé et de la petite lame noire orientent la descente vers des niveaux anciens. Une autre empreinte suggère un passage récent."
+        }
+      ]
+    },
+    {
+      "id": "dedale",
+      "label": "Dédale brûlant",
+      "x": 372,
+      "y": 2390,
+      "pages": [
+        "c152",
+        "c153",
+        "c154",
+        "c155",
+        "c156"
+      ],
+      "notes": []
+    },
+    {
+      "id": "passerelle",
+      "label": "Passage étroit",
+      "x": 130,
+      "y": 2450,
+      "pages": [
+        "c157",
+        "c158",
+        "c159",
+        "c166",
+        "c167"
+      ],
+      "notes": []
+    },
+    {
+      "id": "corniche",
+      "label": "Corniche inférieure",
+      "x": 95,
+      "y": 2520,
+      "pages": [
+        "c160",
+        "c161",
+        "c162",
+        "c163",
+        "c164",
+        "c165"
+      ],
+      "notes": [
+        {
+          "page": "c164",
+          "requiresFlag": "labyrinthCorpseLooted",
+          "text": "Trois lames de jet et une potion trouvées sur la corniche."
+        }
+      ]
+    },
+    {
+      "id": "eboulement",
+      "label": "Galerie effondrée",
+      "x": 345,
+      "y": 2570,
+      "pages": [
+        "c168",
+        "c169",
+        "c170",
+        "c171"
+      ],
+      "notes": []
+    },
+    {
+      "id": "femme",
+      "label": "La femme du dédale",
+      "x": 345,
+      "y": 2640,
+      "pages": [
+        "c172",
+        "c173",
+        "c174"
+      ],
+      "notes": []
+    },
+    {
+      "id": "don",
+      "label": "Épée du forgeron-sorcier",
+      "x": 345,
+      "y": 2710,
+      "pages": [
+        "c175",
+        "c176"
+      ],
+      "notes": [
+        {
+          "page": "c175",
+          "requiresFlag": "labyrinthWomanGiftTaken",
+          "text": "Une femme blessée transmet une épée rouge équilibrée, une ampoule blanche, de la terre noire et une potion."
+        }
+      ]
+    },
+    {
+      "id": "destin",
+      "label": "Son dernier souhait",
+      "x": 345,
+      "y": 2770,
+      "pages": [
+        "c177",
+        "c178"
+      ],
+      "notes": []
+    },
+    {
+      "id": "choix_voix",
+      "label": "Le choix de la voix",
+      "x": 345,
+      "y": 2840,
+      "pages": [
+        "c179",
+        "c180",
+        "c181",
+        "c182"
+      ],
+      "notes": []
+    },
+    {
+      "id": "calme",
+      "label": "Le silence",
+      "x": 345,
+      "y": 2930,
+      "pages": [
+        "c183"
+      ],
+      "notes": []
     }
   ],
   "edges": [
@@ -876,12 +1172,8 @@
       "refectoire"
     ],
     [
-      "garde",
-      "quartiers"
-    ],
-    [
-      "bureau",
-      "quartiers"
+      "refectoire",
+      "garde"
     ],
     [
       "bureau",
@@ -924,8 +1216,84 @@
       "sceau_salle"
     ],
     [
-      "laboratoire",
-      "registres"
+      "medecin",
+      "sceau_salle"
+    ],
+    [
+      "avenue",
+      "grille"
+    ],
+    [
+      "avenue",
+      "puits"
+    ],
+    [
+      "porte",
+      "puits"
+    ],
+    [
+      "porte",
+      "profondeurs"
+    ],
+    [
+      "medecin",
+      "carrefour_soins"
+    ],
+    [
+      "carrefour_soins",
+      "secours"
+    ],
+    [
+      "carrefour_soins",
+      "reserve"
+    ],
+    [
+      "carrefour_soins",
+      "grille"
+    ],
+    [
+      "profondeurs",
+      "dedale"
+    ],
+    [
+      "dedale",
+      "passerelle"
+    ],
+    [
+      "passerelle",
+      "corniche"
+    ],
+    [
+      "dedale",
+      "eboulement"
+    ],
+    [
+      "corniche",
+      "eboulement"
+    ],
+    [
+      "passerelle",
+      "eboulement"
+    ],
+    [
+      "eboulement",
+      "femme"
+    ],
+    [
+      "femme",
+      "don"
+    ],
+    [
+      "don",
+      "destin"
+    ],
+    [
+      "destin",
+      "choix_voix"
+    ],
+    [
+      "choix_voix",
+      "calme"
     ]
   ],
   "deathPages": [
@@ -933,7 +1301,7 @@
     "c23"
   ],
   "endingPages": [
-    "c104"
+    "c183"
   ]
 };
 })();

@@ -1304,6 +1304,7 @@ button { font: inherit; }
         <div class="eyebrow" id="bookEyebrow">ÉCUYER 01 · LIVRE-JEU INTERACTIF</div>
         <h1 id="bookTitle">La Grotte de Valombre</h1>
       </div>
+      <button id="menuBtn" class="icon-btn" aria-label="Ouvrir le menu" style="display:none" aria-hidden="true" tabindex="-1">☰</button>
     </header>
 
     <main id="game" class="game" aria-live="polite" data-design="livre-jeu-80s">
@@ -1336,7 +1337,7 @@ button { font: inherit; }
   <section id="journalPanel" class="atlas-panel hidden" role="dialog" aria-modal="true" aria-labelledby="atlasTitle" aria-hidden="true">
     <div class="atlas-sheet">
     <header class="atlas-head">
-      <div><div class="atlas-kicker">LA GROTTE DE VALOMBRE · CARTE V68.24 · Joueurs</div><h3 id="atlasTitle">Carte de l’aventure</h3></div>
+      <div><div class="atlas-kicker">LA GROTTE DE VALOMBRE · CARTE V68.18</div><h3 id="atlasTitle">Carte de l’aventure</h3></div>
       <button id="journalCloseBtn" class="atlas-close" type="button" aria-label="Fermer la carte">×</button>
     </header>
     <div class="atlas-legend" id="atlasLegend">● Parcours · ┄ Chemin non emprunté · ☠ Mort · ◆ Indice</div>
@@ -1348,7 +1349,13 @@ button { font: inherit; }
   </section>
 
   <div id="drawerBackdrop" class="backdrop hidden"></div>
-
+  <aside id="drawer" class="drawer page-drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <h3>Pages</h3>
+      <button id="closeDrawerBtn" class="icon-btn" aria-label="Fermer la liste des pages">×</button>
+    </div>
+    <div id="pageNavList" class="page-nav-list" aria-label="Navigation directe entre les pages"></div>
+  </aside>
 
   <div id="modalBackdrop" class="backdrop hidden"></div>
   <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
@@ -1363,8 +1370,8 @@ button { font: inherit; }
 
   <script src="./engine/core.js"></script>
   <script src="./app/catalog.js"></script>
-  <script src="./books/ecuyer/01-la-grotte-de-valombre/book.js?v=6831"></script>
-  <script src="./books/ecuyer/01-la-grotte-de-valombre/map.js?v=6824"></script>
-  <script src="./engine/reader.js?v=6831"></script>
+  <script src="./books/ecuyer/01-la-grotte-de-valombre/book.js?v=6843-joueurs-111"></script>
+  <script src="./books/ecuyer/01-la-grotte-de-valombre/map.js?v=6843-joueurs-111"></script>
+  <script src="./engine/reader.js?v=6843-joueurs-111"></script>
 </body>
 </html>
