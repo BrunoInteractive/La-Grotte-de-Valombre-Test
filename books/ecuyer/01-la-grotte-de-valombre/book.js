@@ -852,15 +852,29 @@ const STORY = {
       ${state.history?.filter(id => id === 'c2').length > 1
         ? '<p>Tu refermes les notes et les remets avec tes affaires.</p>'
         : '<p>Tu replies soigneusement les notes et les ranges dans ton inventaire. Tu pourras les relire quand tu le souhaites.</p>'}
-      ${hasItem(state,'fiole_rouge') || state.flags.fioleLaissee
-        ? '<p>Tu peux revenir sur ce choix pour comparer les itinéraires, mais la fiole ne peut être récupérée qu’une fois.</p>'
-        : '<p>La fiole blanche reste entre tes mains. Tu ignores encore à quoi elle sert.</p>'}
+      ${hasItem(state,'fiole_rouge')
+        ? '<p>Tu ranges la fiole blanche dans tes affaires. Tu ignores encore à quoi elle sert.</p>'
+        : !state.flags.fiolePrise && !state.flags.fioleLaissee && !state.visited?.c118 && !state.visited?.c119
+          ? '<p>La fiole blanche reste dans la sacoche. Tu ignores encore à quoi elle sert.</p>'
+          : ''}
     `,
     choices: state => [
-      { label: 'Prendre la fiole et aller au village', to: 'c118', effect: s => { if (!hasItem(s,'fiole_rouge') && !s.visited?.c118 && !s.visited?.c119) addItem(s,'fiole_rouge','Fiole inconnue — liquide blanc','Une fiole de liquide blanc opaque, trouvée dans la sacoche d’Aldren. Son utilité est inconnue.'); s.flags.fioleLaissee = false; updateVialKnowledge(s); } },
-      { label: 'Prendre la fiole et partir vers les grottes', to: 'c119', effect: s => { if (!hasItem(s,'fiole_rouge') && !s.visited?.c118 && !s.visited?.c119) addItem(s,'fiole_rouge','Fiole inconnue — liquide blanc','Une fiole de liquide blanc opaque, trouvée dans la sacoche d’Aldren. Son utilité est inconnue.'); s.flags.fioleLaissee = false; updateVialKnowledge(s); } },
-      { label: 'Laisser la fiole et aller au village', to: 'c3', effect: s => { removeItem(s,'fiole_rouge'); s.flags.fioleLaissee = true; } },
-      { label: 'Laisser la fiole et partir vers les grottes', to: 'c8', effect: s => { removeItem(s,'fiole_rouge'); s.flags.fioleLaissee = true; } }
+      ...(!hasItem(state,'fiole_rouge') && !state.flags.fiolePrise && !state.flags.fioleLaissee && !state.visited?.c118 && !state.visited?.c119
+        ? [{label:'Prendre la fiole',stay:true,effect:s=>{
+            if (!hasItem(s,'fiole_rouge') && !s.flags.fiolePrise && !s.flags.fioleLaissee && !s.visited?.c118 && !s.visited?.c119) {
+              addItem(s,'fiole_rouge','Fiole inconnue — liquide blanc','Une fiole de liquide blanc opaque, trouvée dans la sacoche d’Aldren. Son utilité est inconnue.');
+              s.flags.fiolePrise = true;
+              s.flags.fioleLaissee = false;
+              updateVialKnowledge(s);
+            }
+          }}]
+        : []),
+      {label:'Aller au village',to:'c3',effect:s=>{
+        if (!hasItem(s,'fiole_rouge') && !s.flags.fiolePrise && !s.visited?.c118 && !s.visited?.c119) s.flags.fioleLaissee = true;
+      }},
+      {label:'Partir vers la grotte',to:'c8',effect:s=>{
+        if (!hasItem(s,'fiole_rouge') && !s.flags.fiolePrise && !s.visited?.c118 && !s.visited?.c119) s.flags.fioleLaissee = true;
+      }}
     ]
   },
 
