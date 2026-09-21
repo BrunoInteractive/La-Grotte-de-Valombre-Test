@@ -687,7 +687,7 @@ function setHeroIdentity(state, gender) {
 // VERSION JOUEURS : une galerie déjà visitée ne peut pas être explorée de nouveau.
 // Le flag couvre les nouvelles parties ; visited couvre également les sauvegardes existantes.
 function campGalleryAvailable(state) { return !state.flags.galleryVisited && !state.flags.galleryAttempted && !state.visited?.c31; }
-function campTunnelAvailable(state) { return true; }
+function campTunnelAvailable(state) { return !state.flags.tunnelVisited && !state.visited?.c34 && !state.visited?.c35 && !state.visited?.c36; }
 function replayCombat(state, key) {
   if (state.combats && state.combats[key]) delete state.combats[key];
 }
@@ -2011,7 +2011,7 @@ const STORY = {
     `,
     choices: state => {
       const list = [];
-      list.push({ label: 'Examiner le vieux campement', to: 'c30' });
+      if (!state.visited?.c30) list.push({ label: 'Examiner le vieux campement', to: 'c30' });
       if (campGalleryAvailable(state)) {
         list.push({ label: 'Explorer la galerie condamnée', to: 'c31' });
       }
@@ -3677,10 +3677,10 @@ const STORY = {
     },
     choices: state => {
       const choices = [];
-      choices.push({ label: state.flags.bridgeSatchelSearched ? 'Relire le parchemin dans la sacoche' : 'Fouiller la sacoche du mort', to: 'c65' });
-      {
+      if (!state.flags.bridgeSatchelSearched && !state.visited?.c65) choices.push({ label: 'Fouiller la sacoche du mort', to: 'c65' });
+      if (!state.flags.bridgeCordTaken && !state.visited?.c131 && !hasItem(state, 'ceinture_rouge')) {
         choices.push({
-          label: hasItem(state, 'ceinture_rouge') ? 'Réexaminer la Ceinture de corde rouge' : 'Prendre la Ceinture de corde rouge',
+          label: 'Prendre la Ceinture de corde rouge',
           to: 'c131',
           effect: s => {
             if (!s.flags.bridgeCordTaken && !s.visited?.c131 && !hasItem(s, 'ceinture_rouge')) addItem(
@@ -3749,8 +3749,8 @@ const STORY = {
     `,
     choices: state => {
       return [
-        {
-          label: hasItem(state, 'ceinture_rouge') ? 'Réexaminer la Ceinture de corde rouge' : 'Prendre aussi la Ceinture de corde rouge',
+        ...(!state.flags.bridgeCordTaken && !state.visited?.c131 && !hasItem(state, 'ceinture_rouge') ? [{
+          label: 'Prendre aussi la Ceinture de corde rouge',
           to: 'c131',
           effect: s => {
             if (!s.flags.bridgeCordTaken && !s.visited?.c131 && !hasItem(s, 'ceinture_rouge')) addItem(
@@ -3760,8 +3760,8 @@ const STORY = {
               'Une ceinture des Veilleurs. Elle accorde +1 Force lors des tests pour grimper, retenir ou se suspendre.'
             );
           }
-        },
-        { label: 'Laisser la ceinture et rejoindre la porte', to: 'c64' }
+        }] : []),
+        { label: 'Gagner la porte', to: 'c64' }
       ];
     }
   },
@@ -4299,9 +4299,9 @@ const STORY = {
       <p>Des traces de lutte marquent les entraves. Ce lieu ressemble moins à un dispensaire qu’à une salle de torture. Qui pourrait infliger cela en prétendant sauver des vies ?</p>
       <p>Un morceau de tissu sombre, de la couleur du surcot de Sir Aldren, est resté accroché à une sangle tranchée. Il est passé ici.</p>
       <p>Un vieux mécanisme grince près d’une table. Une armoire éventrée occupe le mur opposé. Le couloir continue au-delà.</p>`,
-    choices: [
-      {label:'Inspecter le mécanisme d’injection',to:'c103'},
-      {label:'Examiner l’armoire éventrée',to:'c138'},
+    choices: s => [
+      ...(!s.visited?.c103?[{label:'Inspecter le mécanisme d’injection',to:'c103'}]:[]),
+      ...(!s.visited?.c138?[{label:'Examiner l’armoire éventrée',to:'c138'}]:[]),
       {label:'Avancer dans le couloir',to:'c197'}
     ]
   },
@@ -4315,7 +4315,7 @@ const STORY = {
     choices: s => [
       ...(!s.flags.labLeverBroken ? [{label:'Tenter d’actionner le levier',to:'c151',effect:triggerInjectionMechanism}] : []),
       ...(s.flags.labLeverBroken ? [{label:'Examiner le bras brisé et sa lueur',to:'c196'}] : []),
-      {label:'Examiner l’armoire éventrée',to:'c138'},
+      ...(!s.visited?.c138?[{label:'Examiner l’armoire éventrée',to:'c138'}]:[]),
       {label:'Poursuivre dans le couloir',to:'c197'}
     ]
   },
@@ -4359,9 +4359,9 @@ const STORY = {
     text: s => `<p>Le couloir se sépare devant un escalier descendant. Une porte donne sur un poste de secours, l’autre sur une petite réserve.</p>
       ${s.flags.commonAmpouleOffered || s.flags.secretPassageOpened ? '<p>Tu reconnais la porte du poste de secours.</p>' : ''}
       ${s.flags.blackEarthBagOffered || s.flags.reserveRatAwakened ? '<p>La réserve sent encore le bois humide et la poussière.</p>' : ''}`,
-    choices: [
-      {label:'Fouiller le poste de secours',to:'c107'},
-      {label:'Examiner la réserve',to:'c108'},
+    choices:s=>[
+      ...(!s.visited?.c107?[{label:'Fouiller le poste de secours',to:'c107'}]:[]),
+      ...(!s.visited?.c108?[{label:'Examiner la réserve',to:'c108'}]:[]),
       {label:'Descendre sans poursuivre les recherches',to:'c109'}
     ]
   },
@@ -4369,10 +4369,9 @@ const STORY = {
     number:'PAGE 114', title:'Le poste de secours',image:'Le poste de secours',
     text:s=>`<p>Une grande salle aux murs écaillés. Deux lits de soins sont repoussés contre la pierre. Des bandes de tissu séchées pendent au-dessus d’une table.</p>
       <p>Une haute armoire médicale est adossée au mur. Plus loin, une étagère porte quelques livres oubliés.</p>
-      ${s.flags.commonAmpouleTaken || s.visited?.c139
-        ? '<p>Dans l’armoire, l’emplacement de l’ampoule déjà prise est vide.</p>'
-        : '<p>La porte de l’armoire est entrouverte. Tu distingues des flacons à l’intérieur.</p>'}
-      ${s.flags.secretPassageOpened ? '<p>Entre deux étagères, la trappe secrète est désormais ouverte.</p>' : ''}`,
+      ${s.flags.secretPassageOpened
+        ? s.visited?.c186 ? '<p>Tu as déjà exploré la cache secrète.</p>' : '<p>Entre deux étagères, la trappe secrète est désormais ouverte.</p>'
+        : ''}`,
     choices:s=>[
       ...(!(s.flags.commonAmpouleTaken || s.visited?.c139)
         ? [{label:'Fouiller la grande armoire',to:'c139',effect:t=>{
@@ -4383,9 +4382,9 @@ const STORY = {
           t.flags.commonAmpouleOffered=true;
         }}]
         : []),
-      {label:s.flags.secretPassageOpened?'Examiner le faux livre et son mécanisme':'Examiner les livres de l’étagère',to:'c184'},
-      ...(s.flags.secretPassageOpened?[{label:'Se glisser dans la trappe secrète',to:'c186'}]:[]),
-      {label:'Revenir au carrefour',to:'c106'}
+      ...(!s.visited?.c184 && !s.visited?.c185?[{label:'Examiner les livres de l’étagère',to:'c184'}]:[]),
+      ...(s.flags.secretPassageOpened && !s.visited?.c186?[{label:'Se glisser dans la trappe secrète',to:'c186'}]:[]),
+      {label:'Quitter le poste de secours et revenir au carrefour',to:'c106'}
     ]
   },
   c108: {
@@ -4396,9 +4395,13 @@ const STORY = {
         ? (s.flags.reserveRatDead ? '<p>Le rat difforme gît entre les sacs déchirés. Il ne bougera plus.</p>' : '<p>Les sacs éventrés rappellent l’attaque du rat. Il est encore là.</p>')
         : '<p>Un faible couinement s’élève derrière les sacs. Quelque chose remue dans la poussière épaisse. L’endroit ne paraît pas sûr.</p>'}`,
     choices:s=>[
-      {label:'Fouiller l’étagère avec précaution',to:'c190'},
-      {label:s.flags.reserveRatDead?'Examiner les sacs éventrés':s.flags.reserveRatAwakened?'Faire face au rat':'Ouvrir les sacs malgré le couinement',to:s.flags.reserveRatDead?'c194':s.flags.reserveRatAwakened?'c192':'c191',effect:t=>{if (!t.flags.reserveRatDead) t.flags.reserveRatAwakened=true;}},
-      {label:'Quitter la réserve',to:'c106'}
+      ...(!s.visited?.c190 && !s.visited?.c140?[{label:'Fouiller l’étagère avec précaution',to:'c190'}]:[]),
+      ...(!s.visited?.c194 && !s.flags.reserveRatBladesTaken
+        ? [{label:s.flags.reserveRatDead || s.combats?.reserveRat?.hp===0?'Examiner le sac du rat':(s.flags.reserveRatAwakened || s.visited?.c191 || s.visited?.c192 || s.visited?.c193)?'Reprendre le combat contre le rat':'Ouvrir les sacs malgré le couinement',
+            to:s.flags.reserveRatDead || s.combats?.reserveRat?.hp===0?'c194':(s.flags.reserveRatAwakened || s.visited?.c191 || s.visited?.c192 || s.visited?.c193)?'c192':'c191',
+            effect:t=>{if (!t.flags.reserveRatDead) t.flags.reserveRatAwakened=true;}}]
+        : []),
+      {label:'Quitter définitivement la réserve',to:'c106'}
     ]
   },
   c109: {
@@ -4409,7 +4412,7 @@ const STORY = {
       <p>Une avenue descend vers les profondeurs de la cité.</p>`,
     choices: s => s.flags.tabletsExamined
       ? [
-        { label: 'Retourner examiner le coffre', to: 'c110' },
+        ...(!s.visited?.c110?[{ label: 'Examiner le coffre', to: 'c110' }]:[]),
         { label: 'Poursuivre par l’avenue', to: 'c112' }
       ]
       : [
@@ -4768,7 +4771,7 @@ const STORY = {
       ? `<p>Tu réexamines la ceinture de corde rouge déjà rangée dans ton équipement. Son tressage est intact.</p>`
       : `<p>Tu examines la ceinture de corde rouge du Veilleur. Son tressage est encore intact. Tu peux poursuivre vers la porte ou fouiller sa sacoche.</p>`,
     choices: state => [
-      { label: state.flags.bridgeSatchelSearched ? 'Relire le parchemin de la sacoche' : 'Fouiller aussi la sacoche', to: 'c65' },
+      ...(!state.flags.bridgeSatchelSearched && !state.visited?.c65?[{ label: 'Fouiller aussi la sacoche', to: 'c65' }]:[]),
       { label: 'Gagner la porte', to: 'c64' }
     ]
   },
@@ -4793,8 +4796,9 @@ const STORY = {
     text:`<p>Les portes de l’armoire ont été arrachées. Des flacons brisés jonchent le sol et les tiroirs sont vides.</p>
       <p>Sur une étiquette déchirée, tu déchiffres quelques mots : « Traitement de la terre noire ». Il ne reste ici aucun remède intact.</p>
       <p>Une traînée de poussière se prolonge vers le couloir, comme si quelqu’un s’était éloigné en rampant.</p>`,
-    choices:[
-      {label:'Examiner la machine',to:'c103'},
+    choices:s=>[
+      ...(!s.visited?.c103?[{label:'Examiner la machine',to:'c103'}]:[]),
+      ...(s.flags.labLeverBroken && !s.visited?.c196?[{label:'Examiner la bague lumineuse',to:'c196'}]:[]),
       {label:'Suivre les traces dans le couloir',to:'c197'}
     ]
   },
@@ -4802,13 +4806,13 @@ const STORY = {
   c139: {
     number: 'PAGE 115', title: "L’ampoule du poste de secours", noImage: true,
     text: `<p>Au milieu des flacons brisés, tu découvres une ampoule intacte. Sur l’étiquette : « Traitement de la terre noire ».</p><p>Tu la protèges dans ton sac. Les autres flacons sont vides ou inutilisables.</p>`,
-    choices: [{label: "Poursuivre la fouille du poste", to: 'c107'}, {label:'Revenir au carrefour',to:'c106'}]
+    choices: [{label: "Poursuivre la fouille du poste", to: 'c107'}, {label:'Quitter le poste et revenir au carrefour',to:'c106'}]
   },
 
   c140: {
     number: 'PAGE 124', title: "La sacoche de terre noire", noImage: true,
     text: `<p>Tu refermes soigneusement la sacoche, sans toucher à la poudre, puis la ranges dans ton sac.</p><p>Tu peux encore inspecter les autres recoins de la réserve, si tu oses.</p>`,
-    choices: [{label:'Poursuivre la fouille de la réserve',to:'c108'}, {label: "Revenir au carrefour", to: 'c106'}]
+    choices: [{label:'Poursuivre la fouille de la réserve',to:'c108'}, {label: "Quitter la réserve et revenir au carrefour", to: 'c106'}]
   },
 
   c141: {
@@ -5194,7 +5198,7 @@ const STORY = {
       <p>Ce n’est pas un livre : couverture et pages ont été taillées dans un même bloc de bois. Tu tires légèrement dessus. Une résistance vient de derrière l’étagère, comme si l’objet était relié à quelque chose.</p>
       ${s.flags.secretPassageOpened?'<p>Le mécanisme est déjà libéré. La trappe demeure ouverte entre les étagères.</p>':'<p>Il suffirait de tirer plus fort.</p>'}`,
     choices:s=>s.flags.secretPassageOpened
-      ? [{label:'Se glisser dans la trappe',to:'c186'},{label:'Revenir dans la salle',to:'c107'}]
+      ? [...(!s.visited?.c186?[{label:'Se glisser dans la trappe',to:'c186'}]:[]),{label:'Revenir dans la salle',to:'c107'}]
       : [{label:'Tirer doucement le faux livre',to:'c185',effect:t=>{t.flags.secretPassageOpened=true;}},
          {label:'Le laisser en place',to:'c107'}]
   },
@@ -5202,13 +5206,17 @@ const STORY = {
     number:'PAGE 117',title:'Le verrou',noImage:true,
     text:`<p>Tu tires le livre vers toi. Un bruit sourd résonne derrière le mur : un verrou vient de se libérer.</p>
       <p>Entre deux étagères, une étroite trappe pivote lentement. L’ouverture laisse passer une seule personne. Aucun bruit ne vient de l’autre côté.</p>`,
-    choices:[{label:'Se glisser par la trappe',to:'c186'},{label:'Rester dans le poste de secours',to:'c107'}]
+    choices:s=>[...(!s.visited?.c186?[{label:'Se glisser par la trappe',to:'c186'}]:[]),{label:'Rester dans le poste de secours',to:'c107'}]
   },
   c186: {
     number:'PAGE 118',title:'La cache du soignant',
-    text:`<p>Tu te glisses dans l’ouverture. La pièce est petite, presque entièrement plongée dans le noir. L’air y est sec et immobile.</p>
+    text:`<p>Tu te glisses dans l’ouverture. La pièce est petite, presque entièrement plongée dans le noir. L’air y est sec et confiné.</p>
       <p>Un grand coffre est ouvert contre le mur. Sur une tablette, un cahier couvert d’une écriture serrée attend près d’une chandelle consumée.</p>`,
-    choices:[{label:'Lire le cahier',to:'c187'},{label:'Examiner le coffre ouvert',to:'c188'},{label:'Ressortir par la trappe',to:'c107'}]
+    choices:s=>[
+      ...(!s.visited?.c187?[{label:'Lire le cahier',to:'c187'}]:[]),
+      ...(!s.visited?.c188?[{label:'Examiner le coffre ouvert',to:'c188'}]:[]),
+      {label:'Ressortir par la trappe',to:'c107'}
+    ]
   },
   c187: {
     number:'PAGE 119',title:'Le cahier du soignant',noImage:true,
@@ -5223,7 +5231,7 @@ const STORY = {
       <blockquote>J’espère qu’elle vous sauvera. »</blockquote>
       <p>Les dernières lignes s’interrompent brusquement.</p>
       <p>Tu refermes le cahier et tournes les yeux vers le coffre ouvert.</p>`,
-    choices:[{label:'Fouiller le coffre',to:'c188'},{label:'Revenir dans la cache',to:'c186'}]
+    choices:s=>[...(!s.visited?.c188?[{label:'Fouiller le coffre',to:'c188'}]:[]),{label:'Revenir dans la cache',to:'c186'}]
   },
   c188: {
     number:'PAGE 120',title:'Le dernier remède',noImage:true,
@@ -5232,8 +5240,8 @@ const STORY = {
         ? '<p>L’emplacement de l’ampoule blanche est vide. Tu as déjà pris le dernier remède du soignant.</p>'
         : '<p>Une petite ampoule de liquide blanc repose dans la cavité, parfaitement intacte.</p><p>À côté, une étiquette : « Contamination par la terre noire. Une dose. »</p>'}`,
     choices:s=>[
-      ...(!s.flags.secretAmpouleTaken?[{label:'Prendre l’ampoule blanche cachée',to:'c189',effect:t=>{
-        if (!t.flags.secretAmpouleTaken) {
+      ...(!s.flags.secretAmpouleTaken && !s.visited?.c189?[{label:'Prendre l’ampoule blanche cachée',to:'c189',effect:t=>{
+        if (!t.flags.secretAmpouleTaken && !t.visited?.c189) {
           addItem(t,'ampoule_blanche_cache','Ampoule blanche — cache du soignant','Usage unique : réduit la terre noire de 4 points, sans soigner les blessures.');
           t.flags.secretAmpouleTaken=true;
         }
@@ -5260,7 +5268,9 @@ const STORY = {
         t.flags.blackEarthBagOffered=true;
       }}]:[]),
       {label:'Revenir dans la réserve',to:'c108'},
-      {label:'Fouiller aussi les sacs',to:s.flags.reserveRatDead?'c194':s.flags.reserveRatAwakened?'c192':'c191',effect:t=>{if(!t.flags.reserveRatDead)t.flags.reserveRatAwakened=true;}}
+      ...(!s.visited?.c194 && !s.flags.reserveRatBladesTaken
+        ? [{label:'Fouiller aussi les sacs',to:s.flags.reserveRatDead || s.combats?.reserveRat?.hp===0?'c194':(s.flags.reserveRatAwakened || s.visited?.c191 || s.visited?.c192 || s.visited?.c193)?'c192':'c191',effect:t=>{if(!t.flags.reserveRatDead)t.flags.reserveRatAwakened=true;}}]
+        : [])
     ]
   },
   c191: {
@@ -5301,21 +5311,21 @@ const STORY = {
         ? '<p>Le sac est vide. Tu as déjà emporté les lames.</p>'
         : '<p>Trois lames de jet reposent au fond, enveloppées dans un chiffon sale.</p>'}`,
     choices:s=>[
-      ...(s.combats?.reserveRat?.hp===0 && !s.flags.reserveRatBladesTaken?[{label:'Prendre les trois lames de jet',to:'c195',effect:t=>{
-        if (!t.flags.reserveRatBladesTaken) {
+      ...(s.combats?.reserveRat?.hp===0 && !s.flags.reserveRatBladesTaken && !s.visited?.c195?[{label:'Prendre les trois lames de jet',to:'c195',effect:t=>{
+        if (!t.flags.reserveRatBladesTaken && !t.visited?.c195) {
           t.throwingBlades=(t.throwingBlades||0)+3;
           syncThrowingBlades(t);
           t.flags.reserveRatBladesTaken=true;
         }
       }}]:[]),
       {label:'Retourner dans la réserve',to:'c108'},
-      {label:'Quitter la réserve',to:'c106'}
+      {label:'Quitter définitivement la réserve',to:'c106'}
     ]
   },
   c195: {
     number:'PAGE 129',title:'Les trois lames récupérées',noImage:true,
     text:s=>`<p>Tu essuies les trois lames et les ranges dans ton équipement.</p><p><strong>Tu possèdes maintenant ${s.throwingBlades} lame${s.throwingBlades>1?'s':''} de jet.</strong></p>`,
-    choices:[{label:'Revenir dans la réserve',to:'c108'},{label:'Revenir au carrefour',to:'c106'}]
+    choices:[{label:'Revenir dans la réserve',to:'c108'},{label:'Quitter la réserve et revenir au carrefour',to:'c106'}]
   },
   c135: {
     number: 'PAGE 156', title: 'Le tir sur la seconde sentinelle', noImage: true,
@@ -5340,7 +5350,7 @@ const STORY = {
         }
       }}] : []),
       {label:'Poursuivre dans le couloir',to:'c197'},
-      {label:'Examiner l’armoire éventrée',to:'c138'}
+      ...(!s.visited?.c138?[{label:'Examiner l’armoire éventrée',to:'c138'}]:[])
     ]
   },
   c197: {
@@ -6372,7 +6382,7 @@ const STORY = {
     title: 'La Grotte de Valombre',
     description: 'Première aventure de la série de l’Écuyer.',
     access: 'free',
-    contentVersion: 72,
+    contentVersion: 74,
     pageMapVersion: 77,
     saveVersion: 18,
     saveScope: 'joueurs', // Sauvegardes séparées du dépôt Travail sur un même domaine.
