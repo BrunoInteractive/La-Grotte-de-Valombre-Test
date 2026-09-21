@@ -156,9 +156,8 @@ function restartFromCheckpoint() {
     }
     state = { ...defaultState(), ...previous };
     if (BOOK.demoEndNode && state.node === BOOK.demoEndNode) state.node = 'start';
-    if (typeof atlasMemory !== 'undefined') {atlasMemory.lastShown=''; atlasSaveMemory();}
     state.journal = journalBackup || state.journal || '';
-    saveState(); closeDrawer(); closeModal(); closeAtlas(); render();
+    saveState(); closeDrawer(); closeModal(); closeJournal(); render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (e) { restartGame(); }
 }
@@ -230,275 +229,82 @@ function loadPageImage(pageNumber, title) {
   tryNext();
 }
 
-/* Carte narrative V62. Sauvegarde indépendante pour garder les découvertes entre les essais. */
-const ATLAS = BOOK.adventureMap;
-const ATLAS_KEY = `ldveh.book.${BOOK.id}.${BOOK.saveScope ? BOOK.saveScope + '.' : ''}atlas.v1`;
-const atlasDetails = document.getElementById('atlasDetails');
-const atlasPoints = document.getElementById('atlasPoints');
-const atlasLines = document.getElementById('atlasLines');
-const atlasCanvas = document.getElementById('atlasCanvas');
-const atlasScroller = document.getElementById('atlasScroller');
-const atlasNodes = new Map((ATLAS?.nodes || []).map(node => [node.id, node]));
-const atlasPageAreas = new Map();
-for (const area of (ATLAS?.nodes || [])) for (const page of area.pages) atlasPageAreas.set(page, area.id);
-const atlasKnownEdges = new Set((ATLAS?.edges || []).map(([a,b]) => [a,b].sort().join('|')));
-function atlasEdgeKey(a,b) { return [a,b].sort().join('|'); }
-function atlasDefaultMemory() {return {version:3,pageMapVersion:71,visited:[],facts:[],edges:[],deaths:[],lastShown:''};}
-function atlasLoadMemory() {
+/* Journal de bord : connaissances débloquées à la lecture, sans carte ni embranchements révélés. */
+const JOURNAL_ENTRIES = Array.isArray(BOOK.journalEntries) ? BOOK.journalEntries : [];
+const JOURNAL_KEY = `ldveh.book.${BOOK.id}.${BOOK.saveScope ? BOOK.saveScope + '.' : ''}journal.v1`;
+const LEGACY_ATLAS_KEY = `ldveh.book.${BOOK.id}.${BOOK.saveScope ? BOOK.saveScope + '.' : ''}atlas.v1`;
+const journalList = document.getElementById('journalList');
+const journalCount = document.getElementById('journalCount');
+const journalIndex = new Map(JOURNAL_ENTRIES.map(entry => [entry.id, entry]));
+function loadJournal() {
+  let entries = [];
   try {
-    const saved = JSON.parse(localStorage.getItem(ATLAS_KEY));
-    if (!saved || typeof saved !== 'object') return atlasDefaultMemory();
-    const initial = atlasDefaultMemory();
-    for (const key of ['visited','facts','edges','deaths']) {
-      initial[key] = Array.isArray(saved[key]) ? saved[key].filter(value => typeof value === 'string') : [];
+    const stored = JSON.parse(localStorage.getItem(JOURNAL_KEY));
+    if (stored && Array.isArray(stored.entries)) entries = stored.entries;
+    else {
+      // Importer uniquement les découvertes déjà débloquées sur l'ancienne carte.
+      const legacy = JSON.parse(localStorage.getItem(LEGACY_ATLAS_KEY));
+      if (legacy && Array.isArray(legacy.facts)) entries = legacy.facts;
     }
-    initial.lastShown = typeof saved.lastShown === 'string' ? saved.lastShown : '';
-    // V62: migrate saved discovery keys and death markers along with the page numbers.
-    if (Number(saved.pageMapVersion || 0) < 62 && ATLAS?.mode === 'work') {
-      const map={c114:'c105',c115:'c106',c116:'c107',c105:'c108',c106:'c109',
-                 c107:'c110',c108:'c111',c109:'c112',c110:'c113',c111:'c114',
-                 c112:'c115',c113:'c116'};
-      const rename=id=>map[id]||id;
-      initial.facts=initial.facts.map(key=>{
-        const at=key.lastIndexOf(':');
-        return at < 0 ? key : key.slice(0,at+1)+rename(key.slice(at+1));
-      });
-      initial.deaths=initial.deaths.map(rename);
-    }
-    if (ATLAS?.mode === 'work' && Number(saved.pageMapVersion || 0) < 63) {
-      initial.facts=initial.facts.filter(key => !key.startsWith('observation:') && !key.startsWith('cahiers:'));
-      initial.lastShown='';
-    }
-    if (ATLAS?.mode === 'work' && Number(saved.pageMapVersion || 0) < 68) {
-      const renumber={c106:'c107',c107:'c108',c108:'c109'};
-      initial.facts=initial.facts.map(key=>{
-        const at=key.lastIndexOf(':');
-        if (at<0) return key;
-        const page=key.slice(at+1);
-        return key.slice(0,at+1)+(renumber[page]||page);
-      });
-      initial.deaths=initial.deaths.map(page=>renumber[page]||page);
-      initial.lastShown='';
-    }
-    if (ATLAS?.mode === 'work' && Number(saved.pageMapVersion || 0) < 69) {
-      const renumber={c117:'c111',c111:'c112',c112:'c113',c113:'c114',c114:'c115',c115:'c116',c116:'c117'};
-      initial.facts=initial.facts.map(key=>{
-        const at=key.lastIndexOf(':');
-        if (at<0) return key;
-        const page=key.slice(at+1);
-        return key.slice(0,at+1)+(renumber[page]||page);
-      });
-      initial.deaths=initial.deaths.map(page=>renumber[page]||page);
-      initial.lastShown='';
-    }
-    if (ATLAS?.mode === 'work' && Number(saved.pageMapVersion || 0) < 71) {
-      initial.facts = initial.facts.filter(key => !key.startsWith('observation:') && !key.startsWith('cahiers:'));
-      initial.lastShown = '';
-    }
-    initial.pageMapVersion=ATLAS?.mode === 'work' ? 71 : 59;
-    return initial;
-  } catch {return atlasDefaultMemory();}
+  } catch (error) { /* Une sauvegarde corrompue ne doit pas bloquer le récit. */ }
+  return {entries:[...new Set(entries.filter(id => typeof id === 'string' && journalIndex.has(id)))]};
 }
-let atlasMemory = atlasLoadMemory();
-function atlasSaveMemory() {try {localStorage.setItem(ATLAS_KEY, JSON.stringify(atlasMemory));} catch (e) {}}
-function atlasRoute() {
-  const sequence = Array.isArray(state.history) ? state.history.slice() : [];
-  if (state.node && !sequence.includes(state.node)) sequence.push(state.node);
-  const areas = [];
-  for (const page of sequence) {
-    const area = atlasPageAreas.get(page);
-    if (area && areas[areas.length-1] !== area) areas.push(area);
+let journalMemory = loadJournal();
+function saveJournal() {
+  try { localStorage.setItem(JOURNAL_KEY, JSON.stringify(journalMemory)); } catch (error) {}
+}
+function syncJournal() {
+  const encountered = new Set(Array.isArray(state.history) ? state.history : []);
+  if (state.node && state.node !== 'start') encountered.add(state.node);
+  for (const [nodeId, seen] of Object.entries(state.visited || {})) if (seen) encountered.add(nodeId);
+  const recorded = new Set(journalMemory.entries);
+  let updated = false;
+  for (const page of encountered) {
+    for (const entry of JOURNAL_ENTRIES) {
+      if (entry.page !== page || recorded.has(entry.id)) continue;
+      if (entry.requiresFlag && !state.flags?.[entry.requiresFlag]) continue;
+      journalMemory.entries.push(entry.id);
+      recorded.add(entry.id);
+      updated = true;
+    }
   }
-  return areas;
+  if (updated) saveJournal();
 }
-function atlasSync() {
-  if (!ATLAS) return false;
-  let changed = false;
-  const discovered = new Set(atlasMemory.visited);
-  const facts = new Set(atlasMemory.facts);
-  const edges = new Set(atlasMemory.edges);
-  const deathPages = new Set(atlasMemory.deaths);
-  const sequence = Array.isArray(state.history) ? state.history.slice() : [];
-  if (state.node && !sequence.includes(state.node) && state.node !== 'start') sequence.push(state.node);
-  let lastArea = '';
-  for (const page of sequence) {
-    const area = atlasPageAreas.get(page);
-    if (!area) {lastArea='';continue;}
-    if (!discovered.has(area)) {discovered.add(area);changed=true;}
-    const info = atlasNodes.get(area);
-    for (const note of (info.notes || [])) {
-      const key = `${area}:${note.page}`;
-      if (note.page === page && (!note.requiresFlag || !!state.flags?.[note.requiresFlag]) && !facts.has(key)) {facts.add(key);changed=true;}
-    }
-    if (lastArea && lastArea !== area) {
-      const key = atlasEdgeKey(lastArea,area);
-      // Un saut du menu de test ne doit jamais inventer une nouvelle branche.
-      if (atlasKnownEdges.has(key) && !edges.has(key)) {edges.add(key);changed=true;}
-    }
-    lastArea = area;
-  }
-  const isDead = (ATLAS.deathPages || []).includes(state.node) || state.hp <= 0 || !!state.flags?.blackEarthTransformed;
-  if (isDead && atlasPageAreas.has(state.node) && !deathPages.has(state.node)) {
-    deathPages.add(state.node);changed=true;
-  }
-  if (changed) {
-    atlasMemory.visited=[...discovered];atlasMemory.facts=[...facts];atlasMemory.edges=[...edges];atlasMemory.deaths=[...deathPages];atlasSaveMemory();
-  }
-  // La dernière page publiée est un bilan d'étape, pas la fin du livre.
-  const isEnding = (ATLAS.endingPages || []).includes(state.node) && state.hp > 0;
-  if (!isDead && !isEnding) return false;
-  const token = `${state.node}:${(state.history || []).length}:${isDead ? 'mort' : 'étape'}`;
-  if (atlasMemory.lastShown === token) return false;
-  atlasMemory.lastShown=token;atlasSaveMemory();
-  return true;
-}
-function atlasSvgPath(start,end,stroke,dash,width) {
-  const svgNS='http://www.w3.org/2000/svg';
-  const line=document.createElementNS(svgNS,'path');
-  line.setAttribute('d',`M ${start.x} ${start.y} L ${end.x} ${end.y}`);
-  line.setAttribute('fill','none');line.setAttribute('stroke',stroke);
-  line.setAttribute('stroke-width',String(width || 3));
-  line.setAttribute('stroke-linecap','round');
-  if (dash) line.setAttribute('stroke-dasharray',dash);
-  atlasLines.appendChild(line);
-}
-function atlasStub(from,to) {
-  const dx=to.x-from.x,dy=to.y-from.y;
-  const length=Math.hypot(dx,dy)||1;
-  const distance=Math.min(23,length*.39);
-  atlasSvgPath(from,{x:from.x+dx/length*distance,y:from.y+dy/length*distance},'#907653','5 5',1);
-}
-function atlasShowDetails(area) {
-  atlasDetails.replaceChildren();
-  const heading=document.createElement('h4');heading.textContent=area.label;atlasDetails.appendChild(heading);
-  const facts=area.notes.filter(note => ATLAS.mode === 'work' || atlasMemory.facts.includes(`${area.id}:${note.page}`));
-  if (!facts.length) {
-    const hint=document.createElement('p');hint.className='atlas-hint';hint.textContent='Aucune découverte narrative enregistrée dans ce lieu.';atlasDetails.appendChild(hint);
+function renderJournal() {
+  journalList.replaceChildren();
+  const entries = journalMemory.entries.map(id => journalIndex.get(id)).filter(Boolean);
+  journalCount.textContent = entries.length === 0 ? 'Aucune découverte pour le moment.'
+    : `${entries.length} découverte${entries.length > 1 ? 's' : ''} consignée${entries.length > 1 ? 's' : ''}`;
+  if (!entries.length) {
+    const empty = document.createElement('p');
+    empty.className = 'journal-empty';
+    empty.textContent = 'Tes découvertes importantes apparaîtront ici au fil de l’aventure.';
+    journalList.appendChild(empty);
     return;
   }
-  facts.forEach(note => {
-    const item=document.createElement('div');item.className='atlas-fact';
-    const text=document.createElement('p');text.textContent=note.text;item.appendChild(text);
-    if (ATLAS.mode === 'work') {
-      const page=document.createElement('small');page.textContent=`Page ${padPage(PAGE_BY_NODE[note.page] ?? Number(note.page.slice(1)))}`;item.appendChild(page);
-    }
-    atlasDetails.appendChild(item);
+  entries.forEach((entry, index) => {
+    const section = document.createElement('article');
+    section.className = 'journal-entry';
+    const heading = document.createElement('h4');
+    // Une scène conserve son intitulé, même si son numéro éditorial change.
+    heading.textContent = STORY[entry.page]?.title?.trim() || entry.title;
+    const copy = document.createElement('p');
+    copy.textContent = entry.text;
+    section.append(heading, copy);
+    journalList.appendChild(section);
   });
 }
-// Mobile: remap both axes (not just CSS width). Labels retain their normal font size.
-// The original scene graph, choices, memories and desktop positions remain untouched.
-let atlasPositions = new Map();
-function atlasLayout() {
-  const available=atlasScroller.clientWidth;
-  if (!available || window.innerWidth>620) {
-    const width=Math.min(600,Math.max(280,(available||608)-8));
-    const scale=width/ATLAS.width;
-    return {width,height:ATLAS.height,positions:new Map(ATLAS.nodes.map(n=>[n.id,{x:Math.round(n.x*scale),y:n.y}]))};
-  }
-  const width=Math.min(400,Math.max(280,available-8));
-  const rows=[];
-  for (const node of [...ATLAS.nodes].sort((a,b)=>a.y-b.y || a.x-b.x)) {
-    let row=rows[rows.length-1];
-    if (!row || node.y-row.y>18) {row={y:node.y,nodes:[]};rows.push(row);}
-    row.nodes.push(node);
-  }
-  const positions=new Map();
-  rows.forEach((row,index)=>{
-    // A single central choice stays on the centreline: straight vertical path.
-    const group=row.nodes.slice().sort((a,b)=>a.x-b.x);
-    const left=width/2;
-    const factor=(width-80)/520;
-    const xs=group.map(node=>group.length===1
-      ?left : left+(node.x-340)*factor);
-    for (let i=1;i<xs.length;i++) xs[i]=Math.max(xs[i],xs[i-1]+85);
-    if (xs[xs.length-1]>width-42) {
-      const excess=xs[xs.length-1]-(width-42);
-      for(let i=0;i<xs.length;i++)xs[i]-=excess;
-    }
-    if(xs[0]<42) {
-      const deficit=42-xs[0];
-      for(let i=0;i<xs.length;i++)xs[i]+=deficit;
-    }
-    group.forEach((node,i)=>positions.set(node.id,{x:Math.round(xs[i]),y:36+index*46}));
-  });
-  return {width,height:36+Math.max(0,rows.length-1)*46+48,positions};
-}
-function atlasDraw() {
-  if (!ATLAS) return;
-  const layout=atlasLayout();
-  atlasPositions=layout.positions;
-  atlasCanvas.style.width=`${layout.width}px`;
-  atlasCanvas.style.height=`${layout.height}px`;
-  atlasLines.setAttribute('viewBox',`0 0 ${layout.width} ${layout.height}`);
-  atlasLines.replaceChildren();atlasPoints.replaceChildren();
-  const fullyVisible=ATLAS.mode === 'work';
-  const seen=new Set(atlasMemory.visited);
-  const walked=new Set(atlasMemory.edges);
-  const route=atlasRoute();const currentEdges=new Set();
-  for (let i=1;i<route.length;i++) currentEdges.add(atlasEdgeKey(route[i-1],route[i]));
-  const visible=id => fullyVisible || seen.has(id);
-  (ATLAS.edges || []).forEach(([a,b]) => {
-    const first=atlasPositions.get(a),second=atlasPositions.get(b);
-    if (!first || !second) return;
-    const used=walked.has(atlasEdgeKey(a,b)),active=currentEdges.has(atlasEdgeKey(a,b));
-    if (used && visible(a) && visible(b)) atlasSvgPath(first,second,active?'#795632':'#a58a62','',active?1.8:1.25);
-    else if (fullyVisible) atlasSvgPath(first,second,'#baaa8b','4 6',.9);
-    else {
-      if (visible(a)) atlasStub(first,second);
-      if (visible(b)) atlasStub(second,first);
-    }
-  });
-  // Au terme de la version d'essai, les trois amorces visibles dans la scène
-  // sont dessinées sans révéler les pages ou les noms des lieux à venir.
-  if (ATLAS.mode === 'player' && seen.has('monde')) {
-    const origin=atlasPositions.get('monde');
-    for (const [dx,dy] of [[-80,55],[0,65],[80,55]]) {
-      const length=Math.hypot(dx,dy);atlasSvgPath(origin,{x:origin.x+dx/length*31,y:origin.y+dy/length*31},'#907653','5 5',1);
-    }
-  }
-  for (const area of ATLAS.nodes) {
-    if (!visible(area.id)) continue;
-    const notes=area.notes.filter(note => fullyVisible || atlasMemory.facts.includes(`${area.id}:${note.page}`));
-    const clickable=notes.length>0;
-    const el=document.createElement(clickable?'button':'div');
-    if (clickable) {el.type='button';el.addEventListener('click',()=>atlasShowDetails(area));
-      el.setAttribute('aria-label',`Découvertes : ${area.label}`);}
-    el.className='atlas-location'+(clickable?' atlas-clickable':'')+(seen.has(area.id)?' atlas-discovered':'')+
-      (atlasPageAreas.get(state.node)===area.id?' atlas-active':'');
-    const position=atlasPositions.get(area.id);
-    el.style.left=`${position.x}px`;el.style.top=`${position.y}px`;
-    const dot=document.createElement('span');dot.className='atlas-dot';dot.setAttribute('aria-hidden','true');el.appendChild(dot);
-    const label=document.createElement('span');label.className='atlas-name';label.textContent=area.label;el.appendChild(label);
-    if (clickable){const clue=document.createElement('span');clue.className='atlas-clue';clue.textContent='◆';clue.setAttribute('aria-hidden','true');el.appendChild(clue);}
-    if (area.pages.some(page=>atlasMemory.deaths.includes(page))){const cross=document.createElement('span');cross.className='atlas-death';cross.textContent='☠';cross.setAttribute('aria-label','Mort sur ce chemin');el.appendChild(cross);}
-    atlasPoints.appendChild(el);
-  }
-  const hint=document.createElement('p');hint.className='atlas-hint';
-  hint.textContent=fullyVisible ? 'Carte complète de travail. Les points ◆ ouvrent les indices et indiquent leurs pages. Cette carte ne modifie pas le parcours du héros.' : 'Les lieux et les découvertes s’ajoutent à mesure que tu avances. Les petits traits indiquent d’autres chemins possibles.';
-  atlasDetails.replaceChildren(hint);
-}
-function openAtlas(summary=false) {
-  if (!ATLAS) return;
-  atlasSync();
-  // Measure the actual mobile viewport after making the panel visible.
-  journalPanel.classList.remove('hidden');journalPanel.setAttribute('aria-hidden','false');
-  atlasDraw();
-  if (summary) {
-    const notice=document.createElement('p');notice.className='atlas-hint';
-    notice.textContent=state.hp<=0 || state.flags?.blackEarthTransformed || (ATLAS.deathPages || []).includes(state.node)
-      ? 'Ton aventure s’arrête ici. La carte conserve cette tentative et les chemins à explorer.'
-      : ATLAS.mode==='player'?'Fin de cette étape de l’aventure. La suite n’est pas encore publiée.':'Bilan de ce parcours : les autres branches restent consultables.';
-    atlasDetails.replaceChildren(notice);
-  }
-  const current=atlasPositions.get(atlasPageAreas.get(state.node));
-  if (current) {
-    // Centre la zone en cours, sans dépendre d'une fonction de défilement du navigateur.
-    atlasScroller.scrollLeft=Math.max(0,current.x-atlasScroller.clientWidth/2);
-    atlasScroller.scrollTop=Math.max(0,current.y-atlasScroller.clientHeight/2);
-  } else {atlasScroller.scrollTop=0;atlasScroller.scrollLeft=0;}
+function openJournal() {
+  syncJournal();
+  renderJournal();
+  journalPanel.classList.remove('hidden');
+  journalPanel.setAttribute('aria-hidden', 'false');
   journalCloseBtn.focus();
 }
-function closeAtlas() {journalPanel.classList.add('hidden');journalPanel.setAttribute('aria-hidden','true');}
+function closeJournal() {
+  journalPanel.classList.add('hidden');
+  journalPanel.setAttribute('aria-hidden', 'true');
+}
 
 function render() {
   const node = STORY[state.node] || STORY.start;
@@ -574,14 +380,13 @@ function render() {
     });
     choices.appendChild(btn);
   });
-  atlasSync();
+  syncJournal();
 }
 
 function restartGame() {
-  atlasMemory.lastShown=''; atlasSaveMemory();
   state = defaultState();
   try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(CHECKPOINT_KEY); } catch (e) {}
-  saveState(); closeDrawer(); closeModal(); closeAtlas(); render();
+  saveState(); closeDrawer(); closeModal(); closeJournal(); render();
   try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0,0); }
 }
 
@@ -689,18 +494,15 @@ modalContent.addEventListener('click', event => {
 
 inventoryBtn.addEventListener('click', openInventory);
 characterBtn.addEventListener('click', openCharacterSheet);
-window.addEventListener('resize', () => {
-  if (!journalPanel.classList.contains('hidden')) atlasDraw();
-});
-journalBtn.addEventListener('click', () => openAtlas());
-journalCloseBtn.addEventListener('click', closeAtlas);
+journalBtn.addEventListener('click', openJournal);
+journalCloseBtn.addEventListener('click', closeJournal);
 restartBtn.addEventListener('click', restartGame);
 if (menuBtn && !BOOK.demoEndNode) menuBtn.addEventListener('click', openDrawer);
 if (closeDrawerBtn) closeDrawerBtn.addEventListener('click', closeDrawer);
 if (drawerBackdrop) drawerBackdrop.addEventListener('click', closeDrawer);
 closeModalBtn.addEventListener('click', closeModal);
 modalBackdrop.addEventListener('click', closeModal);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDrawer(); closeModal(); closeAtlas(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDrawer(); closeModal(); closeJournal(); } });
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(() => {});
 render();

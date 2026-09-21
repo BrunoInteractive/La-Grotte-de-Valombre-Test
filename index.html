@@ -759,57 +759,6 @@ button { font: inherit; }
   text-align:center;
 }
 
-/* V62.1 : le plan mobile utilise des coordonnées compactes calculées en JS,
-   avec des libellés toujours lisibles et sans défilement horizontal. */
-@media (max-width:620px) {
-  .atlas-head { gap:8px; padding:9px 12px; }
-  .atlas-head h3 { font-size:23px; }
-  .atlas-legend { padding:7px 12px; font-size:10px; }
-  .atlas-scroller { min-height:0; }
-  .atlas-canvas { margin-inline:auto; box-shadow:inset 0 0 30px rgba(73,47,21,.10); }
-  .atlas-location { max-width:82px; gap:1px; }
-  .atlas-location .atlas-dot { width:9px; height:9px; border-width:1px; flex-shrink:0; }
-  .atlas-location .atlas-name { font-size:10px; line-height:1.08; overflow-wrap:break-word; }
-  .atlas-location.atlas-clickable { min-width:0; width:82px; padding:1px; }
-  .atlas-location .atlas-death { font-size:19px; top:-8px; }
-  .atlas-details { max-height:26vh; padding:9px 12px; font-size:13px; }
-}
-/* La carte est vectorielle (HTML/CSS/SVG) : aucune illustration à fournir. */
-.atlas-panel { position:fixed; inset:0; z-index:90; display:flex; flex-direction:column; color:#30251a;
-  background:linear-gradient(150deg,#ece1c5,#d6c098); font-family:var(--body-font); }
-.atlas-panel.hidden { display:none !important; }
-.atlas-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 18px;
-  background:#e9ddbf; border-bottom:3px double #886b44; }
-.atlas-kicker { color:#785c3e; font-size:10px; font-weight:700; letter-spacing:.16em; }
-.atlas-head h3 { font-family:var(--display-font); font-size:clamp(23px,4vw,34px); margin:0; }
-.atlas-close { width:42px;height:42px;cursor:pointer;font-size:28px;color:#423020;
-  border:1px solid #8e714a;background:#f7edda;flex-shrink:0; }
-.atlas-legend {padding:8px 18px;border-bottom:1px solid #b49b73;font-size:12px;color:#685037;}
-.atlas-scroller {flex:1; overflow:auto; overscroll-behavior:contain; background:#d8c6a6; }
-.atlas-canvas {position:relative; width:680px; background:
-  radial-gradient(ellipse at 34% 12%,rgba(255,249,224,.78),transparent 54%),
-  linear-gradient(110deg,#e6d7b8,#ccba98);box-shadow:inset 0 0 90px rgba(73,47,21,.13);}
-.atlas-lines {position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
-.atlas-location {position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;
-  flex-direction:column;gap:2px;max-width:104px;text-align:center;color:#463326;}
-.atlas-location .atlas-dot {display:block;width:11px;height:11px;border:2px solid #77583a;
-  border-radius:50%;background:#f0e2c4;box-shadow:0 1px 2px #6c5639;}
-.atlas-location .atlas-name {font-family:var(--display-font);font-size:12px;line-height:1.08;
-  text-shadow:0 1px rgba(255,249,227,.9);white-space:normal;}
-.atlas-location.atlas-active .atlas-dot {background:#423324;border-color:#b98547;outline:3px solid #e7c583;}
-.atlas-location.atlas-discovered .atlas-dot {background:#b48c58;}
-.atlas-location.atlas-clickable {cursor:pointer;border:0;background:transparent;padding:2px;min-width:82px;}
-.atlas-location.atlas-clickable:hover .atlas-name,.atlas-location.atlas-clickable:focus-visible .atlas-name {text-decoration:underline;}
-.atlas-location.atlas-clickable:focus-visible {outline:2px solid #654528;outline-offset:3px;}
-.atlas-location .atlas-clue {position:absolute;right:0;top:0;color:#74542e;font-size:13px;font-weight:bold;}
-.atlas-location .atlas-death {position:absolute;left:calc(50% + 10px);top:-12px;color:#8e382a;font-size:25px;font-weight:bold;}
-.atlas-details {flex:0 0 auto;max-height:30vh;overflow:auto;padding:12px 18px;border-top:3px double #85663e;
-  background:#eee0bf;line-height:1.45;font-size:15px;}
-.atlas-details h4 {font-size:22px;font-family:var(--display-font);margin:0 0 5px;}
-.atlas-details p {margin:5px 0;}
-.atlas-details .atlas-fact {border-left:3px solid #a27a45;padding-left:10px;margin:10px 0;}
-.atlas-details .atlas-fact small {display:block;color:#746047;font-size:11px;}
-.atlas-details .atlas-hint {font-style:italic;color:#695740;}
 @media (max-width:620px) {
   .footer {
     grid-template-columns:repeat(2,1fr);
@@ -1267,34 +1216,22 @@ button { font: inherit; }
   .character-modal-portrait { height: 210px; }
 }
 
-/* V66 — Carte dans un panneau centré, dimensionné à son contenu. */
-.atlas-panel {
-  position:fixed; inset:0; z-index:90; display:flex; align-items:center;
-  justify-content:center; padding:18px; background:rgba(15,12,10,.97);
-}
-.atlas-sheet {
-  display:flex; flex-direction:column; overflow:hidden;
-  width:min(100%,620px); height:min(800px,calc(100dvh - 36px));
-  max-height:calc(100dvh - 36px); min-height:0;
-  background:#e9ddbf; border:1px solid #866c47;
-  box-shadow:0 18px 60px rgba(0,0,0,.48);
-}
-.atlas-scroller { flex:1; min-height:0; overflow:auto; }
-.atlas-canvas { margin-inline:auto; }
-.atlas-location .atlas-name { font-weight:700; }
-.atlas-location .atlas-death {
-  font-family:Georgia,'Times New Roman',serif;
-  font-size:18px; line-height:1; top:-8px;
-  left:calc(50% + 9px); color:#7b3024; font-weight:700;
-  text-shadow:0 1px #f6e2bd;
-}
-@media (max-width:620px) {
-  .atlas-panel { padding:6px; }
-  .atlas-sheet { width:100%; height:calc(100dvh - 12px); max-height:calc(100dvh - 12px); }
-  .atlas-location .atlas-name { font-size:10px; line-height:1.08; font-weight:700; }
-  .atlas-location .atlas-death { font-size:15px; top:-6px; left:calc(50% + 7px); }
-}
-
+/* V68.44 — Journal de bord, une simple liste de découvertes. */
+.journal-panel {position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(26,19,13,.72);color:#30251a;}
+.journal-panel.hidden {display:none !important;}
+.journal-sheet {display:flex;flex-direction:column;width:min(100%,720px);max-height:calc(100dvh - 36px);overflow:hidden;background:#f5e8c9;border:5px double #92714c;box-shadow:0 14px 42px rgba(0,0,0,.42);}
+.journal-head {display:flex;align-items:center;justify-content:space-between;gap:14px;padding:20px 24px 14px;border-bottom:1px solid #baa17c;}
+.journal-kicker {font-size:10px;letter-spacing:.15em;color:#795d3b;font-weight:700;}
+.journal-head h3 {font-family:var(--display-font);font-size:clamp(27px,5vw,38px);margin:4px 0 0;}
+.journal-close {width:44px;height:44px;flex-shrink:0;font-size:30px;cursor:pointer;background:transparent;border:1px solid #a88c64;color:#423020;}
+.journal-content {overflow-y:auto;overscroll-behavior:contain;padding:12px 24px 28px;min-height:0;}
+.journal-count {font-size:12px;letter-spacing:.04em;color:#806743;margin:6px 0 18px;}
+.journal-list {display:flex;flex-direction:column;gap:13px;}
+.journal-entry {border-left:3px solid #a7834c;background:rgba(255,252,242,.42);padding:14px 16px;}
+.journal-entry h4 {font-family:var(--display-font);font-size:clamp(19px,3.6vw,24px);margin:0 0 8px;line-height:1.2;color:#35291f;}
+.journal-entry p {font-size:clamp(15px,2.8vw,17px);line-height:1.5;margin:0;color:#3c3024;}
+.journal-empty {font-style:italic;color:#695740;line-height:1.5;}
+@media(max-width:620px){.journal-panel{padding:7px}.journal-sheet{width:100%;max-height:calc(100dvh - 14px)}.journal-head{padding:16px 13px 12px}.journal-content{padding:10px 13px 20px}.journal-entry{padding:12px}}
 </style>
 </head>
 <body>
@@ -1328,23 +1265,22 @@ button { font: inherit; }
     <footer class="footer">
       <button id="characterBtn" class="footer-btn">Fiche perso</button>
       <button id="inventoryBtn" class="footer-btn">Inventaire <span id="inventoryCount">0</span></button>
-      <button id="journalBtn" class="footer-btn" type="button">Carte</button>
+      <button id="journalBtn" class="footer-btn" type="button">Journal de bord</button>
       <button id="restartBtn" class="footer-btn danger">Recommencer</button>
     </footer>
   </div>
 
 
-  <section id="journalPanel" class="atlas-panel hidden" role="dialog" aria-modal="true" aria-labelledby="atlasTitle" aria-hidden="true">
-    <div class="atlas-sheet">
-    <header class="atlas-head">
-      <div><div class="atlas-kicker">LA GROTTE DE VALOMBRE · CARTE V68.18</div><h3 id="atlasTitle">Carte de l’aventure</h3></div>
-      <button id="journalCloseBtn" class="atlas-close" type="button" aria-label="Fermer la carte">×</button>
-    </header>
-    <div class="atlas-legend" id="atlasLegend">● Parcours · ┄ Chemin non emprunté · ☠ Mort · ◆ Indice</div>
-    <div id="atlasScroller" class="atlas-scroller" tabindex="0" aria-label="Explorer la carte">
-      <div id="atlasCanvas" class="atlas-canvas"><svg id="atlasLines" class="atlas-lines" aria-hidden="true"></svg><div id="atlasPoints"></div></div>
-    </div>
-    <div id="atlasDetails" class="atlas-details" aria-live="polite"><p>Choisis un rond marqué ◆ pour consulter les découvertes.</p></div>
+  <section id="journalPanel" class="journal-panel hidden" role="dialog" aria-modal="true" aria-labelledby="journalTitle" aria-hidden="true">
+    <div class="journal-sheet">
+      <header class="journal-head">
+        <div><div class="journal-kicker">LA GROTTE DE VALOMBRE · TES DÉCOUVERTES</div><h3 id="journalTitle">Journal de bord</h3></div>
+        <button id="journalCloseBtn" class="journal-close" type="button" aria-label="Fermer le journal">×</button>
+      </header>
+      <div class="journal-content" id="journalContent" tabindex="0" aria-label="Découvertes de ton aventure">
+        <p class="journal-count" id="journalCount" aria-live="polite"></p>
+        <div class="journal-list" id="journalList"></div>
+      </div>
     </div>
   </section>
 
@@ -1370,8 +1306,8 @@ button { font: inherit; }
 
   <script src="./engine/core.js"></script>
   <script src="./app/catalog.js"></script>
-  <script src="./books/ecuyer/01-la-grotte-de-valombre/book.js?v=6843-joueurs-111"></script>
-  <script src="./books/ecuyer/01-la-grotte-de-valombre/map.js?v=6843-joueurs-111"></script>
-  <script src="./engine/reader.js?v=6843-joueurs-111"></script>
+  <script src="./books/ecuyer/01-la-grotte-de-valombre/book.js?v=6848"></script>
+  <script src="./books/ecuyer/01-la-grotte-de-valombre/journal.js?v=6847"></script>
+  <script src="./engine/reader.js?v=6844"></script>
 </body>
 </html>

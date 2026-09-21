@@ -667,9 +667,9 @@ function setHeroIdentity(state, gender) {
   state.heroName = state.heroGender === 'male' ? 'Aubin' : 'Aélis';
 }
 
-// VERSION TRAVAIL : les passages restent accessibles après une visite.
-// Les objets, les protections et les récompenses conservent leurs garde-fous.
-function campGalleryAvailable(state) { return true; }
+// VERSION JOUEURS : une galerie déjà visitée ne peut pas être explorée de nouveau.
+// Le flag couvre les nouvelles parties ; visited couvre également les sauvegardes existantes.
+function campGalleryAvailable(state) { return !state.flags.galleryVisited && !state.flags.galleryAttempted && !state.visited?.c31; }
 function campTunnelAvailable(state) { return true; }
 function replayCombat(state, key) {
   if (state.combats && state.combats[key]) delete state.combats[key];
@@ -818,7 +818,7 @@ const STORY = {
     text: state => `
       ${state.history?.filter(id => id === 'c2').length > 1
         ? '<p>Tu rouvres la sacoche d’Aldren. Les trois pièces et les notes ont déjà été récupérées, tu peux néanmoins relire le parchemin et revoir tes choix.</p>'
-        : '<p>Tu ouvres la sacoche. À l’intérieur, tu trouves <strong>trois pièces d’argent</strong>, une petite <strong>fiole rouge sombre</strong> et un morceau de parchemin plié plusieurs fois.</p>'}
+        : '<p>Tu ouvres la sacoche. À l’intérieur, tu trouves <strong>trois pièces d’argent</strong>, une petite <strong>fiole de liquide blanc</strong> et un morceau de parchemin plié plusieurs fois.</p>'}
       <p>Le papier est froissé, taché, presque déchiré par endroits. Certaines lignes ont été griffonnées si fort que la plume a failli percer la feuille.</p>
       <p>Tu le déplies. Ce n’est pas vraiment un message. Plutôt des notes jetées à la hâte, comme pour fixer des idées avant de les oublier.</p>
 
@@ -837,11 +837,11 @@ const STORY = {
         : '<p>Tu replies soigneusement les notes et les ranges dans ton inventaire. Tu pourras les relire quand tu le souhaites.</p>'}
       ${hasItem(state,'fiole_rouge') || state.flags.fioleLaissee
         ? '<p>Tu peux revenir sur ce choix pour comparer les itinéraires, mais la fiole ne peut être récupérée qu’une fois.</p>'
-        : '<p>La fiole rouge reste entre tes mains. Tu ignores encore ce qu’elle contient.</p>'}
+        : '<p>La fiole blanche reste entre tes mains. Tu ignores encore à quoi elle sert.</p>'}
     `,
     choices: state => [
-      { label: 'Prendre la fiole et aller au village', to: 'c118', effect: s => { if (!hasItem(s,'fiole_rouge') && !s.visited?.c118 && !s.visited?.c119) addItem(s,'fiole_rouge','Fiole rouge','Une petite fiole au liquide rouge sombre. Son utilité est encore inconnue.'); s.flags.fioleLaissee = false; } },
-      { label: 'Prendre la fiole et partir vers les grottes', to: 'c119', effect: s => { if (!hasItem(s,'fiole_rouge') && !s.visited?.c118 && !s.visited?.c119) addItem(s,'fiole_rouge','Fiole rouge','Une petite fiole au liquide rouge sombre. Son utilité est encore inconnue.'); s.flags.fioleLaissee = false; } },
+      { label: 'Prendre la fiole et aller au village', to: 'c118', effect: s => { if (!hasItem(s,'fiole_rouge') && !s.visited?.c118 && !s.visited?.c119) addItem(s,'fiole_rouge','Fiole inconnue — liquide blanc','Une fiole de liquide blanc opaque, trouvée dans la sacoche d’Aldren. Son utilité est inconnue.'); s.flags.fioleLaissee = false; updateVialKnowledge(s); } },
+      { label: 'Prendre la fiole et partir vers les grottes', to: 'c119', effect: s => { if (!hasItem(s,'fiole_rouge') && !s.visited?.c118 && !s.visited?.c119) addItem(s,'fiole_rouge','Fiole inconnue — liquide blanc','Une fiole de liquide blanc opaque, trouvée dans la sacoche d’Aldren. Son utilité est inconnue.'); s.flags.fioleLaissee = false; updateVialKnowledge(s); } },
       { label: 'Laisser la fiole et aller au village', to: 'c3', effect: s => { removeItem(s,'fiole_rouge'); s.flags.fioleLaissee = true; } },
       { label: 'Laisser la fiole et partir vers les grottes', to: 'c8', effect: s => { removeItem(s,'fiole_rouge'); s.flags.fioleLaissee = true; } }
     ]
@@ -852,19 +852,23 @@ const STORY = {
     title: 'La place de Valombre',
     image: 'La place de Valombre',
     text: state => {
+      const merchantDone = !!(state.flags.merchantVisited || state.visited?.c4);
+      const streetDone = !!(state.flags.valombreStreetVisited || state.visited?.c6 || state.visited?.c7);
       const details = [];
-      details.push('<p>Le marchand est sous son auvent, la forge donne toujours sur la place, et une ruelle s’ouvre un peu plus loin.</p>');
+      if (!merchantDone) details.push('Le marchand se tient sous son auvent.');
+      details.push('La forge donne toujours sur la place.');
+      if (!streetDone) details.push('Une silhouette attend dans la ruelle.');
       return `
         <p>La place de Valombre est presque déserte. Les volets se ferment les uns après les autres.</p>
-        ${details.join('')}
+        <p>${details.join(' ')}</p>
         <p>Tu peux encore prendre le temps de faire ce qui te semble utile — ou quitter le village.</p>
       `;
     },
     choices: state => {
       const list = [];
-      list.push({ label: 'Voir le marchand', to: 'c4' });
+      if (!state.flags.merchantVisited && !state.visited?.c4) list.push({ label: 'Voir le marchand', to: 'c4' });
       list.push({ label: 'Voir la forgeronne', to: 'c5' });
-      list.push({ label: 'Approcher la personne dans la ruelle', to: 'c6' });
+      if (!state.flags.valombreStreetVisited && !state.visited?.c6 && !state.visited?.c7) list.push({ label: 'Approcher la personne dans la ruelle', to: 'c6' });
       list.push({ label: 'Partir vers la grotte', to: 'c8' });
       return list;
     }
@@ -892,7 +896,7 @@ const STORY = {
       }
       return `
         <p>Le marchand fouille rapidement ses étagères, puis secoue la tête.</p>
-        <blockquote>« Sans argent, je ne peux rien faire pour toi, mon ami. Reviens quand tu auras de quoi payer. »</blockquote>
+        <blockquote>« Sans argent, je ne peux rien faire pour toi, mon ami. »</blockquote>
       `;
     },
     choices: state => {
@@ -923,7 +927,12 @@ const STORY = {
     title: 'La forge',
     image: 'La forgeronne de Valombre',
     onEnter: s => { s.flags.blacksmithVisited = true; },
-    text: state => `
+    text: state => (state.history || []).filter(id => id === 'c5').length > 1 ? `
+      <p>La forgeronne t’accueille d’un signe de tête. Les deux épées sont à ta disposition.</p>
+      <p>« Alors, laquelle préfères-tu ? »</p>
+      <p><strong>Épée lourde de Sir Aldren</strong> — Puissance : <strong>5</strong> · Dextérité de base avec cette arme : <strong>9</strong>.</p>
+      <p><strong>Épée de la forgeronne</strong> — Puissance : <strong>2</strong> · Dextérité de base avec cette arme : <strong>12</strong>.</p>
+    ` : `
       <p>La forgeronne lève immédiatement les yeux lorsque tu entres.</p>
 
       <blockquote>« Toi ? Où est Aldren ? »</blockquote>
@@ -949,6 +958,12 @@ const STORY = {
       <p><strong>Épée de la forgeronne</strong> — Puissance : <strong>2</strong> · Dextérité : <strong>12</strong>.</p>
     `,
     choices: state => {
+      if ((state.history || []).filter(id => id === 'c5').length > 1) {
+        return [
+          { label: 'Choisir l’épée lourde de Sir Aldren', to: 'c3', effect: s => { s.weapon = 'heavy'; } },
+          { label: 'Choisir l’épée de la forgeronne', to: 'c3', effect: s => { s.weapon = 'light'; } }
+        ];
+      }
       return [
         {
           label: 'Accepter l’échange',
@@ -1295,9 +1310,10 @@ const STORY = {
         addItem(
           s,
           'potion_sombre',
-          'Fiole rouge sombre',
-          'Une fiole trouvée sur Gaspard. Elle restaure 3 Vie mais ajoute 2 points de terre noire.'
+          'Fiole rouge sombre — inconnue',
+          'Une fiole trouvée sur Gaspard, semblable à une potion de soin mais anormalement sombre. Effet inconnu.'
         );
+        updateVialKnowledge(s);
       }
     },
     text: `
@@ -1311,7 +1327,7 @@ const STORY = {
 
       <p>Tu la retires.</p>
 
-      <p>C’est une potion de guérison.</p>
+      <p>La fiole ressemble à une potion de guérison.</p>
 
       <p>Tu en as déjà vu auparavant.</p>
 
@@ -1370,21 +1386,17 @@ const STORY = {
     title: 'Rochebrume',
     image: 'Rochebrume',
     text: state => {
-      if (state.flags.strangerGone) {
+      if (state.flags.strangerGone || state.visited?.c19) {
         return `
           <p>La rue de Rochebrume est toujours aussi vide.</p>
-
-          <p>Au croisement, là où se tenait l’étranger quelques instants plus tôt, il n’y a plus personne.</p>
-
-          <p>Seulement la route vide.</p>
+          <p>Au croisement, là où se tenait l’étranger, il n’y a plus personne.</p>
+          ${!(state.flags.eliasVisited || state.visited?.c16) ? '<p>La taverne de Gaspard est encore ouverte.</p>' : '<p>Tu as déjà rencontré Élias. Plus rien ne te retient ici.</p>'}
         `;
       }
-      if (state.flags.eliasVisited) {
+      if (state.flags.eliasVisited || state.visited?.c16) {
         return `
           <p>Le village est toujours désert.</p>
-
           <p>Tu as déjà parlé à Élias. Plus loin, la personne aperçue dans la rue est encore là.</p>
-
           <p>Rien d’autre ne semble devoir te retenir ici.</p>
         `;
       }
@@ -1413,8 +1425,8 @@ const STORY = {
       `;
     },
     choices: state => [
-      { label: 'Entrer dans la taverne de Gaspard', to: 'c16' },
-      { label: state.flags.strangerGone ? 'Revoir la rencontre avec la personne dans la rue' : 'Parler à la personne dans la rue', to: 'c19' },
+      ...(!(state.flags.eliasVisited || state.visited?.c16) ? [{ label: 'Entrer dans la taverne de Gaspard', to: 'c16' }] : []),
+      ...(!(state.flags.strangerGone || state.visited?.c19) ? [{ label: 'Parler à la personne dans la rue', to: 'c19' }] : []),
       { label: 'Quitter Rochebrume et repartir vers la grotte', to: 'c20' }
     ]
   },
@@ -1464,10 +1476,7 @@ const STORY = {
     `,
     choices: state => [
       { label: 'Lui annoncer que Gaspard est mort', to: 'c17', effect: s => { s.flags.gaspardDeathAnnounced = true; } },
-      { label: 'Ne rien lui dire et examiner les lames', to: 'c18', effect: s => { s.flags.gaspardDeathAnnounced = false; } },
-      { label: state.flags.strangerGone ? 'Revoir la rencontre dans la rue' : 'Aller parler à la personne dans la rue', to: 'c19' },
-      { label: 'Retourner dans la rue', to: 'c15' },
-      { label: 'Quitter Rochebrume et repartir vers la grotte', to: 'c20' }
+      { label: 'Ne rien lui dire', to: 'c18' }
     ]
   },
 
@@ -1515,12 +1524,10 @@ const STORY = {
 
       <p>Il refuse désormais de répondre.</p>
     `,
-    choices: state => {
-      const list = [];
-      list.push({ label: state.flags.strangerGone ? 'Revoir la rencontre dans la rue' : 'Aller parler à la personne dans la rue', to: 'c19' });
-      list.push({ label: 'Quitter Rochebrume et repartir vers la grotte', to: 'c20' });
-      return list;
-    }
+    choices: [
+      { label: 'Retourner dans la rue', to: 'c15' },
+      { label: 'Quitter Rochebrume et repartir vers la grotte', to: 'c20' }
+    ]
   },
 
   c18: {
@@ -1673,12 +1680,10 @@ const STORY = {
 
       <p>Seulement la route vide.</p>
     `,
-    choices: state => {
-      const list = [];
-      list.push({ label: 'Entrer dans la taverne de Gaspard avant de repartir', to: 'c16' });
-      list.push({ label: 'Repartir vers la grotte', to: 'c20' });
-      return list;
-    }
+    choices: state => [
+      ...(!(state.flags.eliasVisited || state.visited?.c16) ? [{ label: 'Retourner sur la place', to: 'c15' }] : []),
+      { label: 'Repartir vers la grotte', to: 'c20' }
+    ]
   },
 
   c20: {
@@ -1973,11 +1978,7 @@ const STORY = {
 
       <blockquote>« La terre noire… ne la laisse pas entrer en toi. »</blockquote>
 
-      <p>Il se penche soudain et serre ton poignet.</p>
-
-      <blockquote>« Et si tu entends Aldren… assure-toi d’abord que c’est bien lui. »</blockquote>
-
-      <p>Puis son visage se fige.</p>
+      <p>Soudain, son visage se fige.</p>
 
       <p>Il regarde derrière toi.</p>
 
@@ -2053,13 +2054,13 @@ const STORY = {
 
       <p>Les premières pages sont datées.</p>
 
-      <blockquote>Troisième jour. J’ai encore entendu ma femme cette nuit.</blockquote>
+      <blockquote>Premier jour. J’ai essayé le remède, la terre noire. Je me sens mieux. La voix a disparu.</blockquote>
 
-      <p>Plus loin :</p>
+      <blockquote>Deuxième jour. La voix est revenue. J’ai pris une dose plus forte. Elle s’est tue de nouveau.</blockquote>
 
-      <blockquote>Septième jour. Elle est morte depuis onze ans.</blockquote>
+      <blockquote>Troisième jour. Une douleur est apparue dans ma jambe. Quelque chose semble bouger tout seul sous ma peau. Est-ce qu’une bête m’a piqué ?</blockquote>
 
-      <p>À partir de là, les dates disparaissent.</p>
+      <p>Plus loin, les dates disparaissent.</p>
 
       <p>Les phrases deviennent courtes, nerveuses. Certaines pages ne contiennent qu’un même mot répété jusqu’au bord du papier.</p>
 
@@ -2111,15 +2112,16 @@ const STORY = {
       <p>Une fente sombre subsiste sur le côté. Elle est trop étroite pour ton corps, mais suffisamment large pour laisser passer un courant d’air froid.</p>
 
       <p>En examinant la pierre, tu remarques qu’elle repose dans une sorte de logement circulaire. Avec assez de force, il est peut-être possible de la faire pivoter une fois.</p>
-      ${state.flags.galleryAttempted ? '<p><em>Mode Travail : tu peux rejouer cette épreuve pour vérifier une autre issue. Les objets déjà obtenus ne sont pas dupliqués.</em></p>' : ''}
+      ${state.flags.galleryAttempted ? '<p>Tu as déjà tenté de déplacer le bloc. Tu ne peux pas recommencer.</p>' : ''}
 
       <p><strong>Ta Force : ${currentForce(state)}</strong></p>
     `,
     choices: state => [
-      {
-        label: state.flags.galleryAttempted ? 'Rejouer le déplacement (mode Travail)' : 'Tenter de déplacer le bloc — lancer les trois dés',
+      ...(!state.flags.galleryAttempted ? [{
+        label: 'Tenter de déplacer le bloc — lancer les trois dés',
         to: 'c32',
         effect: s => {
+          if (s.flags.galleryAttempted) return;
           s.flags.galleryAttempted = true;
           s.lastCombatOutcome = roll3D6(s, 'Force', currentForce(s))
             ? 'force_success'
@@ -2128,7 +2130,7 @@ const STORY = {
             ? collectVeilleurBrassard(s)
             : false;
         }
-      },
+      }] : []),
       { label: 'Renoncer et revenir au croisement des galeries', to: 'c30', effect: rememberCampJournalIfVisited }
     ]
   },
@@ -3900,7 +3902,6 @@ const STORY = {
   c73: {
     number: 'PAGE 73',
     title: 'Le seuil',
-    noImage: true,
     image: 'Les voyageurs au seuil',
     text: `
       <p>La dernière scène représente plusieurs voyageurs au pied de la porte.</p>
@@ -4323,14 +4324,17 @@ const STORY = {
 
   c105: {
     number: 'PAGE 112', title: 'Le registre du médecin', noImage: true, image: 'Le registre du médecin',
-    onEnter: s => { s.flags.physicianNotesRead=true; },
+    onEnter: s => { s.flags.physicianNotesRead=true; updateVialKnowledge(s); },
     text: `<p>Dans le couloir, un registre médical repose sur un pupitre. Des observations y comparent l'emprise et les effets de la terre noire.</p>
       <blockquote>« Plus la terre noire gagne le corps, plus l'appel faiblit. Mais la transformation progresse. »</blockquote>
       <p><strong>De 0 à 3 :</strong> l'appel demeure très présent.</p>
       <p><strong>De 4 à 8 :</strong> il devient intermittent. Le corps semble résister à la transformation.</p>
       <p><strong>De 9 à 12 :</strong> l'appel se tait presque, mais des transformations apparaissent.</p>
       <p><strong>À 13 :</strong> aucun retour n'a été observé.</p>
-      <p>Plusieurs lignes évoquent un traitement blanc qui réduit la contamination, sans guérir les blessures.</p>`,
+      <p>À la fin du registre, deux préparations sont décrites avec précision.</p>
+      <blockquote>« Traitement blanc. Liquide blanc opaque, réduit de quatre points la contamination par la terre noire. Aucun effet sur les blessures. »</blockquote>
+      <blockquote>« Potion de soin altérée. Rouge presque noir, présence de terre noire en suspension. Restaure trois points de Vie, mais augmente la contamination de deux points. Ne pas confondre avec les potions rouges ordinaires. »</blockquote>
+      <p>Tu reconnais enfin la fiole blanche d’Aldren et la potion sombre retrouvée sur Gaspard, si tu les as conservées.</p>`,
     choices: [{label:'Quitter le registre',to:'c106'}]
   },
   c106: {
@@ -4667,7 +4671,7 @@ const STORY = {
 
   c118: {
     number: 'PAGE 139', title: "La fiole emportée", noImage: true,
-    text: `<p>Tu glisses la fiole rouge dans ta sacoche. Tu ignores encore ce qu’elle contient.</p><p>Tu rejoins la place du village.</p>`,
+    text: `<p>Tu glisses la fiole blanche dans ta sacoche. Tu ignores encore ce qu’elle contient.</p><p>Tu rejoins la place du village.</p>`,
     choices: [{label: "Rejoindre la place", to: 'c3'}]
   },
 
@@ -5600,7 +5604,7 @@ const STORY = {
     const base = seriesProfile.baseStats || {};
     return {
       node: 'start',
-      pageMapVersion: 76,
+      pageMapVersion: 77,
       heroGender: seriesProfile.heroGender === 'male' ? 'male' : 'female',
       heroName: seriesProfile.heroGender === 'male' ? 'Aubin' : 'Aélis',
       inventory: {},
@@ -5894,7 +5898,7 @@ const STORY = {
     return state;
   }
   // V68.35 : changement de numérotation affichée uniquement.
-  // Les clés cN restent identiques dans node, history, visited, checkpoints et carte.
+  // Les clés cN restent identiques dans node, history, visited, checkpoints et journal.
   function migratePageNumbersV75(state) {
     migratePageNumbersV74(state);
     if (state.pageMapVersion >= 75) return state;
@@ -5921,6 +5925,36 @@ const STORY = {
     return state;
   }
 
+  // V68.45 : l'ID historique « fiole_rouge » reste inchangé afin de préserver
+  // les anciennes sauvegardes. Sa couleur réelle est blanche dans le récit.
+  function updateVialKnowledge(state) {
+    state.inventory = state.inventory || {};
+    const known = !!state.flags?.physicianNotesRead;
+    if (hasItem(state, 'fiole_rouge')) {
+      state.inventory.fiole_rouge.name = known ? 'Ampoule blanche — sacoche d’Aldren' : 'Fiole inconnue — liquide blanc';
+      state.inventory.fiole_rouge.description = known
+        ? 'Traitement identifié dans le registre du médecin. Usage unique : −4 points de terre noire. Ne soigne pas les blessures.'
+        : 'Une fiole de liquide blanc opaque, trouvée dans la sacoche d’Aldren. Son utilité est inconnue.';
+    }
+    if (hasItem(state, 'potion_sombre')) {
+      state.inventory.potion_sombre.name = known ? 'Potion de soin altérée — rouge sombre' : 'Fiole rouge sombre — inconnue';
+      state.inventory.potion_sombre.description = known
+        ? 'Potion identifiée dans le registre du médecin : +3 Vie (sans dépasser le maximum), +2 points de terre noire.'
+        : 'Une fiole trouvée sur Gaspard, semblable à une potion de soin mais anormalement sombre. Effet inconnu.';
+    }
+  }
+
+  function migrateVialKnowledgeV77(state) {
+    migratePageNumbersV76(state);
+    if (state.pageMapVersion >= 77) return state;
+    state.flags = state.flags || {};
+    // Une sauvegarde antérieure sur la page 112 a déjà découvert les préparations.
+    if (state.visited?.c105) state.flags.physicianNotesRead = true;
+    updateVialKnowledge(state);
+    state.pageMapVersion = 77;
+    return state;
+  }
+
   const TEST_ITEM_CATALOG = [
     {
       id: 'parchemin',
@@ -5929,8 +5963,8 @@ const STORY = {
     },
     {
       id: 'fiole_rouge',
-      name: 'Fiole rouge',
-      description: 'Une petite fiole au liquide rouge sombre. Son utilité est encore inconnue.'
+      name: 'Fiole inconnue — liquide blanc',
+      description: 'Une fiole de liquide blanc opaque, trouvée dans la sacoche d’Aldren. Son utilité est inconnue.'
     },
     {
       id: 'potion_guerison',
@@ -5939,8 +5973,8 @@ const STORY = {
     },
     {
       id: 'potion_sombre',
-      name: 'Fiole rouge sombre',
-      description: 'Restaure 3 Vie, sans dépasser le maximum, augmente la terre noire de 2.'
+      name: 'Fiole rouge sombre — inconnue',
+      description: 'Une fiole sombre trouvée sur Gaspard. Effet inconnu avant la lecture du registre médical.'
     },
     {
       id: 'brassard_veilleurs',
@@ -6094,7 +6128,14 @@ const STORY = {
       if (id === 'lame_noire') {
         return `<div class="inventory-actions"><button class="inventory-action-btn" data-action="equip-black-blade">Équiper la lame noire</button></div>`;
       }
-      if (id === 'potion_sombre') return `<div class="inventory-actions"><button class="inventory-action-btn" data-action="use-dark-potion" ${state.hp>=state.maxHp ? 'disabled' : ''}>Boire : +3 Vie, +2 terre noire${contaminationLevel(state)+2>=13 ? " — TRANSFORMATION" : ""}</button></div>`;
+      if (id === 'fiole_rouge') {
+        if (!state.flags.physicianNotesRead) return '<p>Il te faut encore découvrir à quoi sert ce liquide blanc.</p>';
+        return `<div class="inventory-actions"><button class="inventory-action-btn" data-action="use-aldren-white" ${contaminationLevel(state)>0?'':'disabled'}>Utiliser : −4 terre noire</button></div>`;
+      }
+      if (id === 'potion_sombre') {
+        if (!state.flags.physicianNotesRead) return '<p>Composition inconnue. Tu ignores encore les conséquences de son utilisation.</p>';
+        return `<div class="inventory-actions"><button class="inventory-action-btn" data-action="use-dark-potion" ${state.hp>=state.maxHp ? 'disabled' : ''}>Boire : +3 Vie, +2 terre noire${contaminationLevel(state)+2>=13 ? " — TRANSFORMATION" : ""}</button></div>`;
+      }
       if (id === 'sacoche_terre_noire') return `<div class="inventory-actions"><p>Usage unique : +3 terre noire. Après absorption : ${Math.min(13, contaminationLevel(state)+3)}/13.</p><button class="inventory-action-btn" data-action="use-black-earth">Absorber la terre noire</button></div>`;
       if (id === 'ampoule_blanche_cache') return `<div class="inventory-actions"><button class="inventory-action-btn" data-action="use-white-ampoule-cache" ${contaminationLevel(state)>0?'':'disabled'}>Utiliser : −4 points de contamination (Terre noire)</button></div>`;
       if (id === 'ampoule_blanche_commune') return `<div class="inventory-actions"><button class="inventory-action-btn" data-action="use-white-ampoule-common" ${contaminationLevel(state)>0 ? '' : 'disabled'}>Utiliser : −4 points de contamination (Terre noire)</button></div>`;
@@ -6125,6 +6166,7 @@ const STORY = {
         const entry = TEST_ITEM_CATALOG.find(item => item.id === id);
         if (entry) {
           setTestItem(state, entry, !testItemOwned(state, entry));
+          updateVialKnowledge(state);
           api.saveState();
           api.render();
           api.openInventory();
@@ -6217,8 +6259,14 @@ const STORY = {
         return true;
       }
 
+      if (action === 'use-aldren-white') {
+        if (state.flags.physicianNotesRead && useWhiteAmpouleForContamination(state,'fiole_rouge')) {
+          api.saveState(); api.render();
+        }
+        api.openInventory(); return true;
+      }
       if (action === 'use-dark-potion') {
-        if (hasItem(state, 'potion_sombre') && state.hp < state.maxHp) { state.hp=Math.min(state.maxHp,state.hp+3); removeItem(state,'potion_sombre'); raiseContamination(state,2); api.saveState(); api.render(); }
+        if (state.flags.physicianNotesRead && hasItem(state, 'potion_sombre') && state.hp < state.maxHp) { state.hp=Math.min(state.maxHp,state.hp+3); removeItem(state,'potion_sombre'); raiseContamination(state,2); api.saveState(); api.render(); }
         api.openInventory(); return true;
       }
       if (action === 'use-black-earth') {
@@ -6307,8 +6355,8 @@ const STORY = {
     title: 'La Grotte de Valombre',
     description: 'Première aventure de la série de l’Écuyer.',
     access: 'free',
-    contentVersion: 69,
-    pageMapVersion: 76,
+    contentVersion: 72,
+    pageMapVersion: 77,
     saveVersion: 18,
     saveScope: 'joueurs', // Sauvegardes séparées du dépôt Travail sur un même domaine.
     assetBase: './books/ecuyer/01-la-grotte-de-valombre/images',
@@ -6330,7 +6378,7 @@ const STORY = {
     },
     imageExtensions: ['webp', 'png', 'jpg', 'jpeg'],
     createInitialState,
-    migrateState: migratePageNumbersV76,
+    migrateState: migrateVialKnowledgeV77,
     rules: { currentForce, currentDexterity, combatPower, weaponLabel, currentProtection, maxProtection, applyDamage, raiseContamination },
     characterSheetHtml,
     inventory,
