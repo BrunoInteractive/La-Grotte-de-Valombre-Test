@@ -1243,6 +1243,26 @@ button { font: inherit; }
 }
 .combat-secondary-roll > strong {display:block;font-size:14px;color:#4f3825;}
 .combat-secondary-roll p {margin:4px 0;font-size:14px;}
+
+/* V68.59 — dés visibles avant le lancer, révélés au même endroit après chaque tour. */
+.combat-roll-waiting { text-align:center; }
+.combat-die-pending {
+  display:inline-flex; align-items:center; justify-content:center;
+  font:bold 25px Georgia,serif; color:#735c45; background:#f7eed9;
+}
+.combat-roll-btn { border-color:#80613d; }
+.combat-roll-btn:disabled { opacity:.6; cursor:wait; }
+.combat-roll-result:not(.combat-roll-waiting) .die-visual {
+  animation: valombre-dice-reveal .27s ease-out both;
+}
+@keyframes valombre-dice-reveal {
+  from { opacity:.42; transform:translateY(-5px) rotate(-8deg); }
+  to { opacity:1; transform:translateY(0) rotate(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .combat-roll-result .die-visual { animation:none !important; }
+}
+
 </style>
 </head>
 <body>
@@ -1317,8 +1337,8 @@ button { font: inherit; }
 
   <script src="./engine/core.js"></script>
   <script src="./app/catalog.js"></script>
-  <script src="./books/ecuyer/01-la-grotte-de-valombre/book.js?v=6857"></script>
-  <script src="./books/ecuyer/01-la-grotte-de-valombre/journal.js?v=6847"></script>
-  <script src="./engine/reader.js?v=6844"></script>
+  <script src="./books/ecuyer/01-la-grotte-de-valombre/book.js?v=68.63"></script>
+  <script src="./books/ecuyer/01-la-grotte-de-valombre/journal.js?v=68.59"></script>
+  <script src="./engine/reader.js?v=68.59"></script>
 </body>
 </html>

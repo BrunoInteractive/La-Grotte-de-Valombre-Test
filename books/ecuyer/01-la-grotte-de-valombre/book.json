@@ -4,13 +4,13 @@
   "orderInSeries": 1,
   "title": "La Grotte de Valombre",
   "access": "free",
-  "contentVersion": 74,
+  "contentVersion": 78,
   "entry": "book.js",
   "assetBase": "images",
   "episode": 1,
   "slug": "la-grotte-de-valombre",
   "saveVersion": 18,
-  "buildLabel": "V68.57 — Joueurs : fiole optionnelle page 002, puis choix de destination.",
+  "buildLabel": "V68.63 — Joueurs TEST 111 : note sur les chemins et la rejouabilité dans la fiche du héros",
   "pageMapVersion": 77,
   "demoEndPage": 111
 }

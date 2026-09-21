@@ -191,6 +191,7 @@ function damageAbsorptionHtml(result) {
 
 function fightRound(state, key, enemy) {
   const combat = combatState(state, key, enemy);
+  if (state.hp <= 0 || combat.hp <= 0) return combat.last;
   const heroDice = roll2D6();
   const enemyDice = roll2D6();
   const heroDexterity = currentDexterity(state);
@@ -286,7 +287,7 @@ function throwingBladeResultHtml(state, key, enemy) {
       <div class="combat-dice">${combat.lastBlade.dice.map(renderDie).join('')}</div>
       <p>Dextérité : ${combat.lastBlade.dexterity} · Dés : ${combat.lastBlade.total} (réussite si total ≤ Dextérité).</p>
       <div class="combat-outcome">${combat.lastBlade.success
-        ? `<strong>La lame atteint sa cible.</strong> Tu infliges <strong>${combat.lastBlade.damage}</strong> point${combat.lastBlade.damage > 1 ? 's' : ''} de dégâts.`
+        ? `<strong>La lame atteint sa cible.</strong> Tu infliges <strong>${combat.lastBlade.damage}</strong> point${combat.lastBlade.damage > 1 ? 's' : ''} de dégâts.${combat.hp <= 0 && combat.lastBlade.damage > 0 ? '<br><strong>La créature s’effondre. Elle est morte.</strong>' : ''}`
         : '<strong>La lame manque sa cible.</strong> Aucun dégât.'}
         <br><strong>Tu restes hors de portée : aucune riposte sur ce lancer.</strong></div>
       <div class="combat-life-line">Lames restantes : <strong>${state.throwingBlades || 0}</strong> · Vie adverse : <strong>${combat.hp} / ${enemy.maxHp}</strong></div>
@@ -298,15 +299,17 @@ function combatActionChoices(state, key, enemy, pageId, rollLabel = null) {
   const combat = combatState(state, key, enemy);
   if (combat.hp <= 0 || state.hp <= 0) return [];
   const list = [{
-    label: rollLabel || (combat.round === 0 ? 'Lancer les dés de combat' : 'Continuer le combat'),
-    to: pageId,
+    label: combat.round === 0 && !combat.lastBlade ? 'Jeter les dés' : 'Jeter les dés — tour suivant',
+    stay: true,
+    inlineCombat: true,
     effect: s => fightRound(s, key, enemy)
   }];
   if ((state.throwingBlades || 0) > 0) {
     const qty = state.throwingBlades || 0;
     list.push({
       label: `Lancer une lame de jet — ${qty} restante${qty > 1 ? 's' : ''} (jet de Dextérité, 2 dégâts si réussi, sans riposte)`,
-      to: BLADE_RESULT_PAGES[key],
+      stay: true,
+      inlineCombat: true,
       effect: s => throwBladeAtEnemy(s, key, enemy)
     });
   }
@@ -341,7 +344,7 @@ function combatRoundHtml(state, key, enemy) {
     : `Bonus de Force ${r.enemyForceBonus}`;
 
   const outcomeText = r.outcome === 'hero'
-    ? `<strong>Tu remportes l’échange.</strong><br>Tu infliges <strong>${r.damage}</strong> point${r.damage > 1 ? 's' : ''} de dégâts <span class="combat-detail">(${heroDamageDetail})</span>.`
+    ? `<strong>Tu remportes l’échange.</strong><br>Tu infliges <strong>${r.damage}</strong> point${r.damage > 1 ? 's' : ''} de dégâts <span class="combat-detail">(${heroDamageDetail})</span>.${combat.hp <= 0 && r.damage > 0 ? '<br><strong>La créature s’effondre. Elle est morte.</strong>' : ''}`
     : r.outcome === 'enemy'
       ? (() => {
           const protectionLine = r.protectionAbsorbed > 0
@@ -589,6 +592,7 @@ function sentinelRound(state, target, blade) {
     report.push(success
       ? `Ta lame touche la sentinelle ${target + 1} : ${damage} dégâts.`
       : `Ta lame manque la sentinelle ${target + 1} : aucun dégât.`);
+    if (f.hp[target] <= 0 && damage > 0) report.push(`La sentinelle ${target + 1} s’effondre. Elle est morte.`);
     report.push('Tu restes hors de portée. Aucune des sentinelles ne riposte pendant ce lancer.');
   } else {
     heroDice = roll2D6();
@@ -599,6 +603,7 @@ function sentinelRound(state, target, blade) {
       const damage = Math.min(f.hp[target], forceDamageBonus(currentForce(state)) + (state.weapon === 'none' ? 0 : combatPower(state)));
       f.hp[target] -= damage;
       report.push(`Tu touches la sentinelle ${target + 1} : ${damage} dégâts.`);
+      if (f.hp[target] <= 0 && damage > 0) report.push(`La sentinelle ${target + 1} s’effondre. Elle est morte.`);
     } else if (heroScore < targetScore) {
       const result = applyDamage(state, 1);
       if (result.hpLost > 0 && !f.contaminated) { raiseContamination(state, 1); f.contaminated = true; }
@@ -628,8 +633,8 @@ function sentinelChoices(state) {
   const choices = [];
   f.hp.forEach((hp, i) => {
     if (hp <= 0) return;
-    choices.push({ label: `Attaquer la sentinelle ${i+1} à l’épée (${hp} Vie)`, to: i === 0 ? 'c132' : 'c134', effect: s => sentinelRound(s, i, false) });
-    if ((state.throwingBlades || 0) > 0) choices.push({ label: `Lancer une lame sur la sentinelle ${i+1} (${state.throwingBlades} restantes)`, to: i === 0 ? 'c133' : 'c135', effect: s => sentinelRound(s, i, true) });
+    choices.push({ label: `Jeter les dés contre la sentinelle ${i+1} (${hp} Vie)`, stay: true, inlineCombat: true, effect: s => sentinelRound(s, i, false) });
+    if ((state.throwingBlades || 0) > 0) choices.push({ label: `Lancer une lame sur la sentinelle ${i+1} (${state.throwingBlades} restantes)`, stay: true, inlineCombat: true, effect: s => sentinelRound(s, i, true) });
   });
   return choices;
 }
@@ -765,6 +770,8 @@ const STORY = {
         <div class="hero-characteristics" role="note">
           <div class="hero-info-title">Avant de commencer</div>
           <p>En bas de l’écran, tu peux consulter à tout moment ta fiche perso et ton inventaire. Tu y retrouveras tes caractéristiques, ton équipement et les objets découverts pendant l’aventure.</p>
+          <p>Chaque chemin révèle une partie du mystère.</p>
+          <p>Pour en percer tous les secrets, il te faudra peut-être vivre l’aventure plusieurs fois…</p>
         </div>
       </div>
     `,
@@ -1791,8 +1798,6 @@ const STORY = {
     title: 'La salle aux ombres mouvantes',
     image: 'La salle aux ombres mouvantes',
     text: `
-      <p>Tu choisis l’autre passage.</p>
-
       <p>Tu avances dans un couloir de plus en plus étroit, au point que la roche semble vouloir se refermer sur toi.</p>
 
       <p>Puis, soudain, l’espace s’ouvre.</p>
@@ -2050,7 +2055,7 @@ const STORY = {
     `,
     choices: [{
       label: 'Lancer les trois dés',
-      to: 'c33',
+      to: 'c33', diceTest: true,
       effect: s => {
         if (roll3D6(s, 'Dextérité', currentDexterity(s))) {
           s.lastCombatOutcome = 'second_round_win';
@@ -2448,7 +2453,7 @@ const STORY = {
     `,
     choices: [{
       label: 'Te glisser entre les fissures — lancer les trois dés de Dextérité',
-      to: 'c39',
+      to: 'c39', diceTest: true,
       effect: s => {
         const ok = roll3D6(s, 'Dextérité', currentDexterity(s));
         s.flags.fissurePass = ok ? 'success' : 'fail';
@@ -2755,7 +2760,7 @@ const STORY = {
       label: state.weapon === 'none'
         ? 'Esquiver le tentacule — tester ta Dextérité'
         : 'Dégainer et frapper le tentacule — tester ta Dextérité',
-      to: 'c46',
+      to: 'c46', diceTest: true,
       effect: s => {
         const success = roll3D6(s, 'Dextérité', currentDexterity(s));
         s.flags.lakeTentacleOutcome = success ? 'counter' : 'lookHit';
@@ -2820,7 +2825,7 @@ const STORY = {
     `,
     choices: [{
       label: 'Traverser la portion glissante — tester ta Dextérité',
-      to: 'c49',
+      to: 'c49', diceTest: true,
       effect: s => {
         const ok = roll3D6(s, 'Dextérité', currentDexterity(s));
         s.flags.stairsCross = ok ? 'success' : 'fail';
@@ -3461,7 +3466,7 @@ const STORY = {
     `,
     choices: state => {
       const list = [
-        { label: 'Garder ton calme et continuer lentement', to: 'c129', effect: s => { s.flags.bridgeSolution = 'calm'; s.flags.bridgeCalmPassed = roll3D6(s, 'Dextérité', currentDexterity(s)); } }
+        { label: 'Garder ton calme et continuer lentement', to: 'c129', diceTest: true, effect: s => { s.flags.bridgeSolution = 'calm'; s.flags.bridgeCalmPassed = roll3D6(s, 'Dextérité', currentDexterity(s)); } }
       ];
       if (state.throwingBlades > 0) {
         list.push({
@@ -3477,7 +3482,7 @@ const STORY = {
       list.push(
         {
           label: 'Courir jusqu’à l’autre côté',
-          to: 'c60',
+          to: 'c60', diceTest: true,
           effect: s => {
             const ok = roll3D6(s, 'Dextérité', currentDexterity(s));
             s.flags.bridgeRun = ok ? 'success' : 'fail';
@@ -4015,7 +4020,7 @@ const STORY = {
       <p>Deux silhouettes entrent dans le poste de garde. Elles portent les restes d'un uniforme.</p>
       <p>Leurs traits demeurent presque humains. Une terre noire et épaisse coule de leurs bouches.</p>
       <p>L'une avance devant toi. L'autre contourne le pupitre.</p>
-      <p>Tu dois affronter les deux. Au corps à corps, chacune peut te frapper tant qu'elle tient debout. Une lame de jet offre un tir sans riposte immédiate.</p>
+      <p>Au corps à corps, tu choisis une seule sentinelle à attaquer. Tant que l’autre est debout, elle t’attaque aussi pendant cet échange, sans que tu puisses riposter contre elle. Une lame de jet ne déclenche aucune riposte immédiate.</p>
       ${sentinelCardsHtml(s)}`,
     choices: s => sentinelChoices(s)
   },
@@ -4024,7 +4029,7 @@ const STORY = {
     text: s => `
       <p>Les deux sentinelles te pressent dans l'espace étroit du poste de garde.</p>
       ${sentinelCardsHtml(s)}
-      ${s.flags.sentinelResultAcknowledged ? "" : sentinelResultHtml(s)}
+      ${sentinelResultHtml(s)}
       ${(s.sentinelFight && s.sentinelFight.hp.every(h => h <= 0)) ? '<p>Les deux gardiens sont tombés. Le silence revient. Une porte ouverte au fond du poste conduit à l’ancienne armurerie.</p>' : ''}`,
     choices: s => s.hp <= 0 ? fatalChoices() : (s.sentinelFight && s.sentinelFight.hp.every(h => h <= 0))
       ? [{ label: 'Fouiller l’armurerie', to: 'c81' }]
@@ -4327,7 +4332,7 @@ const STORY = {
         ? '<p>Le bras gît au sol, brisé. Tu ne pourras plus actionner cette machine.</p>'
         : '<p>Tu pourrais encore tenter d’actionner le levier.</p>'}`,
     choices: s => [
-      ...(!s.flags.labLeverBroken ? [{label:'Tenter d’actionner le levier',to:'c151',effect:triggerInjectionMechanism}] : []),
+      ...(!s.flags.labLeverBroken ? [{label:'Tenter d’actionner le levier',to:'c151', diceTest: true,effect:triggerInjectionMechanism}] : []),
       ...(s.flags.labLeverBroken ? [{label:'Examiner le bras brisé et sa lueur',to:'c196'}] : []),
       ...(!s.visited?.c138?[{label:'Examiner l’armoire éventrée',to:'c138'}]:[]),
       {label:'Poursuivre dans le couloir',to:'c197'}
@@ -4570,7 +4575,7 @@ const STORY = {
       }
       list.push({
         label: 'Descendre par les prises — lancer les trois dés de Dextérité',
-        to: 'c143',
+        to: 'c143', diceTest: true,
         effect: s => {
           const ok = roll3D6(s, 'Dextérité', currentDexterity(s));
           s.flags.cityWellDescent = ok ? 'success' : 'fail';
@@ -4843,7 +4848,7 @@ const STORY = {
   },
   c143: {
     number: 'PAGE 161', title: "La descente à mains nues", noImage: true,
-    text: `<p>Tu renonces aux mécanismes et attaques les prises une à une. La paroi s’effrite déjà sous tes doigts.</p><p>Tu poursuis la descente.</p>`,
+    text: s => `${diceResultHtml(s)}<p>Tu renonces aux mécanismes et attaques les prises une à une. La paroi s’effrite déjà sous tes doigts.</p>${s.flags.cityWellDescent === 'success' ? '<p>Tu maîtrises ta descente et retrouves un appui solide.</p>' : s.flags.cityWellDescent === 'fail' ? '<p>Une prise cède et tu glisses sur la roche avant de retrouver un appui.</p>' : '<p>Tu te prépares à poursuivre.</p>'}`,
     choices: [{label: "Poursuivre la descente", to: 'c115'}]
   },
   c144: {
@@ -5016,7 +5021,7 @@ const STORY = {
     text:s=>`<p>La traversée commence. Un faux pas suffirait à te précipiter plus bas.</p>
       ${labyrinthVoiceTier(s)==='clear'?'<p>Une voix souffle tout près : « La dalle claire… évite-la. » Une partie du passage se détache sous tes yeux.</p>':labyrinthVoiceTier(s)==='faint'?'<p>Un murmure traverse ta tête : « Pas… là… » Tu hésites devant les pierres humides.</p>':'<p>Aucun murmure. Seulement l’eau qui goutte dans le vide.</p>'}
       <p>Le chemin se rétrécit encore.</p>`,
-    choices:[{label:'Franchir le passage glissant',to:'c159',effect:s=>labyrinthTrap(s,'labyrinthLedge')}]
+    choices:[{label:'Franchir le passage glissant',to:'c159', diceTest: s => labyrinthVoiceTier(s) !== 'clear',effect:s=>labyrinthTrap(s,'labyrinthLedge')}]
   },
   c159: {
     number: 'PAGE 176', title: '', noImage: true,
@@ -5082,7 +5087,7 @@ const STORY = {
       <p>Le plafond commence à s’écrouler.</p>`,
     choices:[
       {label:'Glisser sous l’arche effondrée',to:'c169'},
-      {label:'Bondir par-dessus les dalles brisées',to:'c170',effect:s=>labyrinthTrap(s,'labyrinthArch')}
+      {label:'Bondir par-dessus les dalles brisées',to:'c170', diceTest: s => labyrinthVoiceTier(s) !== 'clear',effect:s=>labyrinthTrap(s,'labyrinthArch')}
     ]
   },
   c169: {
@@ -5390,7 +5395,7 @@ const STORY = {
       <blockquote>« Aidez-moi. Je vous en prie. »</blockquote>`,
     choices:s=>s.flags.youngKnightOutcome
       ? [{label:'Quitter le couloir',to:'c104'}]
-      : [{label:'L’aider à se relever (test de Dextérité)',to:'c199',effect:reachForYoungKnight},
+      : [{label:'L’aider à se relever (test de Dextérité)',to:'c199', diceTest: true,effect:reachForYoungKnight},
          {label:'Lui dire que tu préfères continuer seul',to:'c200',effect:t=>{t.flags.youngKnightOutcome='left';}}]
   },
   c199: {
@@ -5412,6 +5417,76 @@ const STORY = {
   },
 
 };
+
+
+  // V68.59 — combat sur une seule page : mêmes jets, mêmes conséquences, nouveau rendu.
+  // Les pages de résultats historiques restent disponibles pour les sauvegardes et l'index TEST.
+  function waitingCombatDiceHtml(opponentName) {
+    const pair = '<span class="die-visual combat-die-pending" aria-label="Dé non lancé">?</span>'.repeat(2);
+    return `<div class="combat-roll-result combat-roll-waiting" aria-label="Dés prêts à être lancés">
+      <div class="combat-roll-title">Prêt à combattre</div>
+      <div class="combat-roll-grid">
+        <div class="combat-side"><strong>TOI</strong><div class="combat-dice">${pair}</div></div>
+        <div class="combat-versus">VS</div>
+        <div class="combat-side"><strong>${opponentName}</strong><div class="combat-dice">${pair}</div></div>
+      </div></div>`;
+  }
+
+  // Quatre combats avaient une page de départ et une page de résultat distinctes.
+  // Après le premier jet, afficher le résultat narratif de l'ancienne page sans changer de numéro.
+  for (const [entryId, resultId, key] of [
+    ['c26','c27','shadowMass'],
+    ['c36','c38','rochebrumeMissing'],
+    ['c61','c62','bridgeWalker'],
+    ['c191','c192','reserveRat']
+  ]) {
+    const entry = STORY[entryId];
+    const result = STORY[resultId];
+    const originalText = entry.text;
+    const originalChoices = entry.choices;
+    entry.text = s => {
+      const combat = combatState(s, key, ENEMIES[key]);
+      if (combat.last || combat.lastBlade) return typeof result.text === 'function' ? result.text(s) : result.text;
+      const intro = typeof originalText === 'function' ? originalText(s) : originalText;
+      return intro + waitingCombatDiceHtml(ENEMIES[key].name);
+    };
+    entry.choices = s => {
+      const combat = combatState(s, key, ENEMIES[key]);
+      if (s.hp <= 0) return fatalChoices();
+      if (combat.hp <= 0) return typeof result.choices === 'function' ? result.choices(s) : result.choices;
+      return typeof originalChoices === 'function' ? originalChoices(s) : originalChoices;
+    };
+  }
+
+  // Les autres combats utilisent déjà une seule scène pour démarrer et conclure.
+  for (const [sceneId, key] of [
+    ['c47','isletCrawler'], ['c97','observationPrisoner'],
+    ['c149','observationPrisonerCorridor'], ['c153','labyrinthWanderer'],
+    ['c161','labyrinthCaiman'], ['c192','reserveRat']
+  ]) {
+    const scene = STORY[sceneId];
+    const originalText = scene.text;
+    scene.text = s => {
+      const combat = combatState(s, key, ENEMIES[key]);
+      const narrative = typeof originalText === 'function' ? originalText(s) : originalText;
+      return !combat.last && !combat.lastBlade && combat.hp > 0 && s.hp > 0
+        ? narrative + waitingCombatDiceHtml(ENEMIES[key].name) : narrative;
+    };
+  }
+  // La première sentinelle attaquée ne doit plus nous emmener sur les pages 153–156.
+  const firstSentinelsText = STORY.c79.text;
+  STORY.c79.text = s => {
+    const combat = ensureSentinels(s);
+    if (combat.last) return STORY.c80.text(s);
+    return firstSentinelsText(s) + waitingCombatDiceHtml('SENTINELLES NOIRES');
+  };
+  const sentinelCombatText = STORY.c80.text;
+  STORY.c80.text = s => {
+    const combat = ensureSentinels(s);
+    const narrative = sentinelCombatText(s);
+    return !combat.last && s.hp > 0 && combat.hp.some(h => h > 0)
+      ? narrative + waitingCombatDiceHtml('SENTINELLES NOIRES') : narrative;
+  };
 
   // Libellés complets de l’outil de navigation TEST.
   // Les titres narratifs de STORY restent volontairement masqués sur certaines pages.
