@@ -4,12 +4,12 @@
   "orderInSeries": 1,
   "title": "La Grotte de Valombre",
   "access": "free",
-  "contentVersion": 117,
+  "contentVersion": 118,
   "entry": "book.js",
   "assetBase": "images",
   "episode": 1,
   "slug": "la-grotte-de-valombre",
   "saveVersion": 23,
-  "buildLabel": "V68.117 — Joueurs COMPLET : checkpoints aux pages 020, 074, 135 et 200.",
+  "buildLabel": "V68.118 — Joueurs COMPLET : toute fin atteinte dans la chambre de l’esprit impose de recommencer depuis le début.",
   "pageMapVersion": 86
 }

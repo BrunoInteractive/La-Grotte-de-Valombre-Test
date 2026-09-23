@@ -6898,7 +6898,7 @@ const STORY = {
     title: 'La Grotte de Valombre',
     description: 'Première aventure de la série de l’Écuyer.',
     access: 'free',
-    contentVersion: 117,
+    contentVersion: 118,
     pageMapVersion: 86,
     saveVersion: 23,
     saveScope: 'joueurs',

@@ -465,7 +465,14 @@ function render() {
     });
   }
 
-  const availableChoices = pendingDice ? [{label:'Jeter les dés', action:'resolveDice'}] : state.flags?.blackEarthTransformed && !node.sheet ? [{label:"Reprendre au dernier point de sauvegarde",action:"checkpoint"},{label:"Recommencer depuis le début",action:"restart"}] : state.hp <= 0 && !node.sheet ? fatalChoices() : typeof node.choices === 'function' ? node.choices(state) : (node.choices || []);
+  // Une fois une issue finale atteinte dans la chambre de l'esprit, la partie est terminée :
+  // impossible de revenir au checkpoint 200 pour tester immédiatement une autre fin.
+  const finalLockedEnding = new Set(['c215', 'c216', 'c217', 'c218', 'c221']).has(renderNodeId);
+  const availableChoices = pendingDice ? [{label:'Jeter les dés', action:'resolveDice'}]
+    : finalLockedEnding ? [{label:'Recommencer depuis le début', action:'restart'}]
+    : state.flags?.blackEarthTransformed && !node.sheet ? [{label:"Reprendre au dernier point de sauvegarde",action:"checkpoint"},{label:"Recommencer depuis le début",action:"restart"}]
+    : state.hp <= 0 && !node.sheet ? fatalChoices()
+    : typeof node.choices === 'function' ? node.choices(state) : (node.choices || []);
   choices.innerHTML = '';
   availableChoices.forEach((choice, i) => {
     const btn = document.createElement('button');
