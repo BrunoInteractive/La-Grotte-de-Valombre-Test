@@ -262,7 +262,7 @@
     "id": "profondeurs:c117",
     "page": "c117",
     "title": "Sous la Cité morte",
-    "text": "Des marques de l’œil fermé et de la petite lame noire orientent la descente vers des niveaux anciens. Une autre empreinte suggère un passage récent."
+    "text": "Les traces de bottes se poursuivent dans la poussière des marches, vers les niveaux anciens."
   },
   {
     "id": "corniche:c164",
@@ -328,5 +328,11 @@
     "title": "Une silhouette dans le couloir",
     "text": "Un très jeune chevalier est accroupi dans le couloir. Il semble perdu et pleure."
   }
+  ,{"id":"horde:c202","page":"c202","title":"Les condamnés","text":"Une multitude de corps transformés errait dans la grande caverne. Tu as survécu à leur assaut."}
+  ,{"id":"aldren:c203","page":"c203","title":"Sir Aldren","text":"Sir Aldren a survécu jusqu’à la prison, mais la transformation a déjà gagné la partie inférieure de son corps."}
+  ,{"id":"lame:c206","page":"c206","title":"La lame noire","text":"Aldren avait trouvé la lame noire. Elle est capable de trancher les liens du sceau ou de frapper le cœur de l’esprit.","requiresFlag":"blackBladeRecovered"}
+  ,{"id":"sac:c210","page":"c210","title":"La poudre","text":"Une autre survivante détient un sac de poudre capable de faire s’effondrer la voûte de la prison."}
+  ,{"id":"esprit:c212","page":"c212","title":"L’esprit prisonnier","text":"La voix affirme avoir été emprisonnée par un sorcier jaloux. Son récit varie avec la terre noire qui brouille tes perceptions. Sa véracité reste incertaine."}
+
 ];
 })();
