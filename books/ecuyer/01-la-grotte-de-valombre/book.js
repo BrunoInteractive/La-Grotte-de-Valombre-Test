@@ -2032,7 +2032,6 @@ const STORY = {
     number: 'PAGE 28',
     title: 'Le camp sous la roche',
     image: 'Le camp sous la roche',
-    onEnter: s => setCheckpoint(s, 'Le camp sous la roche'),
     text: `
       <p>Tu quittes enfin la salle du combat.</p>
 
@@ -2648,7 +2647,6 @@ const STORY = {
     number: 'PAGE 40',
     title: 'Le monde sous la montagne',
     image: 'Le monde sous la montagne',
-    onEnter: s => setCheckpoint(s, 'Le monde sous la montagne'),
     text: `
       <p>La fissure s’élargit brusquement.</p>
 
@@ -3899,7 +3897,6 @@ const STORY = {
     number: 'PAGE 69',
     title: 'La Cité morte',
     image: 'La Cité morte',
-    onEnter: s => setCheckpoint(s, 'La Cité morte'),
     text: state => {
       const otherWays = [];
       if (state.flags.worldRoute !== 'lake') otherWays.push('une rampe remonte depuis les quartiers noyés');
@@ -4760,7 +4757,6 @@ const STORY = {
 
   c117: {
     number: 'PAGE 138', title: 'Sous la Cité morte', image: 'Sous la Cité morte',
-    onEnter: s => setCheckpoint(s, 'Sous la Cité morte'),
     text: s => `<p>${s.flags.labyrinthWomanGiftTaken ? 'Après avoir quitté la femme, tu retrouves l’escalier derrière la porte noire.' : 'Tu retrouves l’escalier derrière la porte noire.'} Il s’enfonce sous la cité, entre des blocs fendillés.</p>
       <p>Dans la poussière des marches, les traces de bottes se poursuivent vers les profondeurs.</p>
       <p>L’air se réchauffe. Un coup sourd résonne plus bas. Tu resserres ta prise sur ton arme.</p>`,
@@ -6902,7 +6898,7 @@ const STORY = {
     title: 'La Grotte de Valombre',
     description: 'Première aventure de la série de l’Écuyer.',
     access: 'free',
-    contentVersion: 116,
+    contentVersion: 117,
     pageMapVersion: 86,
     saveVersion: 23,
     saveScope: 'joueurs',
@@ -6945,7 +6941,9 @@ const STORY = {
     inventory,
     checkpoints: [
       { node: 'c20', label: 'Entrée de la grotte', onlyIfNone: true },
-      { node: 'c201', label: 'La caverne des condamnés' }
+      { node: 'c74', label: 'Trois chemins dans la cité' },
+      { node: 'c114', label: 'Le puits des Veilleurs' },
+      { node: 'c183', label: 'Au-delà du dédale' }
     ],
     // V68.115 : reprendre automatiquement les sauvegardes de l'ancienne version Joueurs TEST (v18).
     // La portée « joueurs » garantit qu'aucune sauvegarde du dépôt Travail n'est importée.
