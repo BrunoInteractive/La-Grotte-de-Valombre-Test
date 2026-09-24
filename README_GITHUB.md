@@ -1,11 +1,21 @@
-# V45 — Version test joueurs — Installation GitHub
+# La Grotte de Valombre — V68.119 Joueurs COMPLET — CACHE FIX
 
-**Version complète :** décompresser le ZIP V45, puis placer son **contenu** à la racine du dépôt des joueurs, en conservant tous les chemins. Ne pas envoyer le ZIP lui-même ni créer un sous-dossier V45 sur GitHub.
+Décompresser TOUT le contenu de cette archive à la racine du dépôt GitHub Pages
+des joueurs, en remplaçant les fichiers existants.
 
-**Mise à jour depuis V44 :** remplacer `books/ecuyer/01-la-grotte-de-valombre/book.js` et `books/ecuyer/01-la-grotte-de-valombre/book.json` par les fichiers du ZIP de mise à jour. Les autres fichiers n'ont pas changé pour le jeu.
+Fichiers importants ajoutés/modifiés :
+- `sw.js` à la racine : Service Worker de mise à jour ;
+- `engine/reader.js` : force un contrôle du Service Worker à chaque ouverture ;
+- `version.json` : permet de vérifier facilement la version réellement publiée ;
+- `index.html` : charge `reader.js?v=68.119`.
 
-**Images :** aucune illustration n'est fournie. Conserver le dossier `books/ecuyer/01-la-grotte-de-valombre/images/` et ses PNG présents sur GitHub. Ne pas supprimer ce dossier lors d'une mise à jour.
+La sauvegarde du joueur reste dans `localStorage` et n'est pas supprimée.
 
-**Sauvegardes :** ne pas changer l'URL GitHub Pages, les clés de sauvegarde ou l'identifiant du livre. La démo continue de s'arrêter page 40 et peut être étendue plus tard avec reprise de la partie.
+IMPORTANT POUR LES PROCHAINES VERSIONS
+À chaque nouvelle mise en ligne, augmenter `APP_VERSION` dans `sw.js`
+(ex. 68.120, 68.121, etc.) et changer également la version du `reader.js`
+dans `index.html` si `reader.js` a été modifié.
 
-**V45 :** texte de la page 2 plus spontané, relecture dans l'inventaire identique au parchemin, forgeronne et accords, épée légère Puissance 2, épée lourde Puissance 5, dégâts calculés dynamiquement. Portraits et pages restent en PNG.
+Le Service Worker utilise le réseau en priorité et conserve le cache seulement
+comme secours hors connexion. Cela évite qu'une vieille version du livre reste
+bloquée chez un testeur.

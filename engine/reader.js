@@ -643,6 +643,11 @@ closeModalBtn.addEventListener('click', closeModal);
 modalBackdrop.addEventListener('click', closeModal);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDrawer(); closeModal(); closeJournal(); } });
 
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(() => {});
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker
+    .register('./sw.js', { updateViaCache: 'none' })
+    .then(registration => registration.update().catch(() => {}))
+    .catch(() => {});
+}
 render();
 })();
